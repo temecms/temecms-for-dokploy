@@ -1,0 +1,237 @@
+# TemeCMS for Dokploy: Teme's docker/compose.dokploy.yml at release
+# v0.8.0-alpha.1 (teme-pin), changed only where marked "TemeCMS:". Every such
+# comment says why. Compare with Teme's file: scripts/sync-compose.sh.
+# Teme's own header said: tested locally and on Dokploy v0.31.0. This copy has
+# not been deployed yet (NOT-YET-PROVED.md).
+# The values come from template.toml (generated or typed in the Environment
+# tab): TEME_IMAGE, TEME_UPDATER_IMAGE, TEME_IMAGE_REPOSITORY, APP_URL, APP_KEY,
+# DB_PASSWORD, POSTGRES_PASSWORD, TEME_GITHUB_TOKEN, TEME_DOKPLOY_URL,
+# TEME_DOKPLOY_TOKEN, TEME_DOKPLOY_COMPOSE_ID. Any other Teme setting (mail,
+# TRUSTED_PROXIES, TEME_UPDATES_CHANNEL...) reaches every service through env_file.
+# teme-db-setup makes Teme's own limited login (teme_app) and both databases
+# on every deploy, instead of the recipe's initdb script (I-379).
+name: teme
+
+x-teme-environment: &teme-environment
+    APP_URL: ${APP_URL}
+    APP_KEY: ${APP_KEY}
+    DB_HOST: teme-postgres
+    DB_PORT: '5432'
+    DB_DATABASE: teme_site
+    DB_USERNAME: teme_app
+    DB_PASSWORD: ${DB_PASSWORD}
+    TEME_VERIFY_DATABASE: teme_verify
+    PAGE_CACHE_DRIVER: static
+    PGCONNECT_TIMEOUT: '3'
+    TEME_IMAGE_REPOSITORY: ${TEME_IMAGE_REPOSITORY:-}
+    # TemeCMS: env_file (below) hands the whole Environment tab to every Teme
+    # service, so these secrets, which only one service may hold, are blanked
+    # here; the service that needs one sets it again. (environment: wins over
+    # env_file:.) Teme's file had no env_file, so it had no such leak.
+    TEME_DOKPLOY_TOKEN: ''
+    TEME_GITHUB_TOKEN: ''
+    POSTGRES_PASSWORD: ''
+
+x-teme: &teme
+    image: ${TEME_IMAGE}
+    # TemeCMS: Dokploy's Compose type has no env_file of its own (Teme issue
+    # 444): without this line only the fixed list below reaches Teme, so mail,
+    # TRUSTED_PROXIES and the update channel could not be set from the
+    # Environment tab. Dokploy writes that tab to a .env file beside this file,
+    # so we read it; required: false lets a plain `docker compose config` run.
+    env_file:
+        - path: .env
+          required: false
+    environment: *teme-environment
+    volumes:
+        - media:/var/www/html/storage/app
+        - page-cache:/var/www/html/storage/page-cache
+    networks:
+        - default
+    restart: unless-stopped
+
+services:
+    teme-postgres:
+        image: postgres:18.6-trixie
+        environment:
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        volumes:
+            - pgdata:/var/lib/postgresql
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'pg_isready',
+                    '--host',
+                    '127.0.0.1',
+                    '--username',
+                    'postgres',
+                    '--dbname',
+                    'postgres',
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 30
+            start_period: 30s
+        stop_grace_period: 1m
+        networks:
+            - default
+        restart: unless-stopped
+        deploy:
+            resources:
+                limits: { cpus: '1', memory: 1g }
+
+    # Makes Teme's own limited login and its two databases, and sets the
+    # login's password to DB_PASSWORD, on every deploy; safe to run again.
+    teme-db-setup:
+        image: postgres:18.6-trixie
+        environment:
+            PGPASSWORD: ${POSTGRES_PASSWORD}
+            TEME_DB_PASSWORD: ${DB_PASSWORD}
+        entrypoint: ['/bin/sh', '-c']
+        command:
+            - |
+                psql -v ON_ERROR_STOP=1 --no-psqlrc -h teme-postgres -U postgres -d postgres <<'SQL'
+                \getenv teme_password TEME_DB_PASSWORD
+                SELECT 'CREATE ROLE teme_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teme_app') \gexec
+                ALTER ROLE teme_app PASSWORD :'teme_password';
+                SELECT 'CREATE DATABASE teme_site OWNER teme_app TEMPLATE template0 ENCODING ''UTF8''' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teme_site') \gexec
+                SELECT 'CREATE DATABASE teme_verify OWNER teme_app TEMPLATE template0 ENCODING ''UTF8''' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teme_verify') \gexec
+                REVOKE ALL ON DATABASE teme_site FROM PUBLIC;
+                REVOKE ALL ON DATABASE teme_verify FROM PUBLIC;
+                SQL
+        restart: 'no'
+        networks:
+            - default
+        depends_on:
+            teme-postgres:
+                condition: service_healthy
+
+    # Migrates under a lock, then exits; every other part waits for it.
+    deploy:
+        <<: *teme
+        command: ['php', 'artisan', 'teme:deploy']
+        init: true
+        restart: 'no'
+        healthcheck:
+            disable: true
+        depends_on:
+            teme-db-setup:
+                condition: service_completed_successfully
+
+    web:
+        <<: *teme
+        networks:
+            - default
+            # Teme's own line, kept as proved by hand. Dokploy adds this network
+            # itself for a routed service, so this may be removable: untested.
+            - dokploy-network
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits: { cpus: '${TEME_WEB_CPUS:-1}', memory: '${TEME_WEB_MEMORY:-1g}' } # TemeCMS: a variable, so one busy host can shrink it (Teme's numbers are the defaults)
+
+    worker:
+        <<: *teme
+        command:
+            ['php', 'artisan', 'queue:work', '--tries=3', '--max-time=3600']
+        init: true
+        stop_grace_period: 6m
+        healthcheck:
+            test: ['CMD', 'healthcheck-queue']
+            start_period: 10s
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits: { cpus: '${TEME_WORKER_CPUS:-0.5}', memory: '${TEME_WORKER_MEMORY:-512m}' } # TemeCMS: a variable, as on web
+
+    worker-long:
+        <<: *teme
+        command:
+            [
+                'php',
+                'artisan',
+                'queue:work',
+                'database-long',
+                '--queue=long',
+                '--tries=3',
+                '--max-time=3600',
+            ]
+        init: true
+        stop_grace_period: 6m
+        healthcheck:
+            test: ['CMD', 'healthcheck-queue']
+            start_period: 10s
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits: { cpus: '${TEME_WORKER_CPUS:-0.5}', memory: '${TEME_WORKER_MEMORY:-512m}' } # TemeCMS: a variable, as on web
+
+    scheduler:
+        <<: *teme
+        command: ['php', 'artisan', 'schedule:work']
+        init: true
+        stop_grace_period: 30m
+        healthcheck:
+            test: ['CMD', 'healthcheck-schedule']
+            start_period: 10s
+        environment:
+            <<: *teme-environment
+            TEME_GITHUB_TOKEN: ${TEME_GITHUB_TOKEN:-} # TemeCMS: ":-" so an empty token prints no warning on every deploy
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits: { cpus: '0.25', memory: 256m }
+
+    # Carries out an update asked for from the admin (I-3326): sets TEME_IMAGE
+    # through Dokploy's API and deploys this Compose service. Its own image is
+    # TEME_UPDATER_IMAGE, so the update it runs never replaces it midway.
+    updater:
+        image: ${TEME_UPDATER_IMAGE:?set TEME_UPDATER_IMAGE to the same image as TEME_IMAGE}
+        command: ['php', 'artisan', 'teme:updater']
+        init: true
+        stop_grace_period: 1m
+        healthcheck:
+            disable: true
+        # TemeCMS: the updater is not built from the x-teme anchor, so it reads
+        # the Environment tab itself; same reason as on the anchor.
+        env_file:
+            - path: .env
+              required: false
+        environment:
+            <<: *teme-environment
+            TEME_GITHUB_TOKEN: ${TEME_GITHUB_TOKEN:-} # TemeCMS: ":-", as on the scheduler
+            TEME_UPDATER_PLATFORM: dokploy
+            TEME_DOKPLOY_URL: ${TEME_DOKPLOY_URL:-}
+            TEME_DOKPLOY_TOKEN: ${TEME_DOKPLOY_TOKEN:-}
+            TEME_DOKPLOY_COMPOSE_ID: ${TEME_DOKPLOY_COMPOSE_ID:-}
+        networks:
+            - default
+            # TemeCMS: so TEME_DOKPLOY_URL=http://dokploy:3000 (set by the
+            # template) reaches the panel without a public address. Teme's
+            # guide says to add this by hand; NOT YET PROVED.
+            - dokploy-network
+        restart: unless-stopped
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits: { cpus: '0.25', memory: 256m }
+
+networks:
+    dokploy-network:
+        external: true
+
+volumes:
+    pgdata:
+    media:
+    page-cache:

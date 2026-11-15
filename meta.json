@@ -1,0 +1,13 @@
+{
+  "id": "temecms",
+  "name": "TemeCMS for Dokploy",
+  "version": "0.8.0-alpha.1",
+  "description": "Teme, a content management system built on Laravel and PostgreSQL, with its database, queue workers, scheduler and Update button. Alpha: every Teme release so far is an alpha.",
+  "logo": "logo.svg",
+  "links": {
+    "github": "https://github.com/temecms/temecms-for-dokploy",
+    "website": "https://github.com/temecms/teme",
+    "docs": "https://github.com/temecms/teme/tree/main/docs/guides/operators"
+  },
+  "tags": ["cms", "laravel", "postgresql", "publishing"]
+}
