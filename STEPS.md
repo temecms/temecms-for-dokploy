@@ -36,7 +36,7 @@ Detail for every item: [NOT-YET-PROVED.md](NOT-YET-PROVED.md). Who: a maintainer
 
 - [x] The private-repository steps, the registry sign-in and the token text are gone from the README and `.env.example`.
 - [x] meta.json's links are filled in.
-- [ ] Add a licence file.
+- [x] Add a licence file: MIT, as Teme (2026-11-15).
 
 ## Stage 6. Publish in Dokploy's public templates list
 
@@ -53,7 +53,7 @@ Steps:
 - [ ] Remove `dokploy-network` from `web` and `updater` in the compose copy (their rule), after stage 2 item 8 showed whether it is needed. The updater's internal address may then need the panel's own `https://` address. Proof: item 6 re-run.
 - [ ] Put the files in `blueprints/temecms/` of a fork of `Dokploy/templates` (this project keeps them at the top level; the fork copy is generated, never edited).
 - [ ] Run their check and import the preview's Base64 on a scratch project. Proof: the test list above passes.
-- [ ] Open the pull request. Waits on: stage 2 passing and a licence.
+- [ ] Open the pull request. Waits on: stage 2 passing.
 
 ## Stage 7. Each Teme release after that
 

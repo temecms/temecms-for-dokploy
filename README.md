@@ -150,3 +150,7 @@ This README holds the panel's steps and the template. Teme's guide, `docs/guides
 ## Thanks
 
 The idea of a one-click stack for a CMS on Dokploy comes from DokployPress, a WordPress stack for Dokploy, itself forked and extended from `itsmereal/dokploy-wp`. No code is copied from either.
+
+## Licence
+
+MIT, as Teme: see [LICENSE](LICENSE). `docker-compose.yml` is adapted from Teme's `docker/compose.dokploy.yml`, under the same licence.
