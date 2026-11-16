@@ -1,156 +1,133 @@
 # TemeCMS for Dokploy
 
-This project is not finished: see [STEPS.md](STEPS.md) for where it stands.
+Install [Teme](https://github.com/temecms/teme) on a [Dokploy](https://dokploy.com) server from Dokploy's template list. Teme is a content management system built on Laravel and PostgreSQL. This repository holds its Dokploy template: one Compose service that runs the site, its own PostgreSQL, two queue workers, the scheduler, the plugin installer and the updater behind the admin's Update button.
 
-## What this is
+These instructions are written for Dokploy v0.31.2. The image, `ghcr.io/temecms/teme`, is public, so Dokploy needs no registry sign-in.
 
-A one-click stack that puts a new site of [Teme](https://github.com/temecms/teme) on a Dokploy server, with everything set up.
+## Ways to install
 
-Teme is a content management system built on Laravel and PostgreSQL. Dokploy is a hosting panel you run on your own server.
+Dokploy can make a service in several ways. This table says which ones run Teme, and what each needs from you.
 
-Pinned Teme release: v0.8.0-alpha.1 (teme-pin).
+| Route | What you do | What Teme needs |
+|---|---|---|
+| **Template**, with this repository's Base URL | Create Service › Template, paste the Base URL, choose TemeCMS, Deploy | Nothing: the template fills every setting. See [Install from the template list](#install-from-the-template-list). |
+| **Compose**, provider **Raw** | Create Service › Compose, paste the compose file | A short block of settings pasted once on the Environment tab. This is the only route where you paste values. See [Install by pasting the compose file](#install-by-pasting-the-compose-file). |
+| **Compose**, provider **GitHub**, **GitLab**, **Bitbucket**, **Gitea** or **Git** | Create Service › Compose, point it at this repository and the compose path | The same block of settings as Raw. See [Install from Git](#install-from-git). |
+| **Compose**, Compose Type **Stack** (Docker Swarm) | Not supported | Teme's file needs Docker Compose: its `deploy` step runs once and the other parts wait for it to finish, which Swarm can't do, and Swarm ignores the order the parts start in. Choose Compose Type **Docker Compose**. |
+| **Application**: Docker image, GitHub, GitLab, Bitbucket, Gitea or Git with the Dockerfile, or Drop (a ZIP) | Teme as one container | See *Install as one Application* in [Teme's Dokploy page](https://github.com/temecms/teme/blob/main/docs/guides/operators/platforms/dokploy.md). |
+| **Database**, and Dokploy's scheduled jobs | Not used with the Compose file | The file brings its own PostgreSQL, and Teme runs its own schedule. |
 
-Every Teme release so far is an alpha, and so is this stack. Nothing here has been deployed yet: see [NOT-YET-PROVED.md](NOT-YET-PROVED.md). Written against Dokploy v0.31.2.
+## Install from the template list
 
-## What you get
+1. **Open the template list.** In your Dokploy project, choose **Create Service**, then **Template**.
+2. **Point it at Teme.** In **Base URL**, paste:
 
-One Dokploy service that runs:
+   ```text
+   https://raw.githubusercontent.com/temecms/temecms-for-dokploy/main
+   ```
 
-- the Teme site (`web`),
-- its PostgreSQL database (`teme-postgres`),
-- two queue workers and a scheduler,
-- a one-time `deploy` step that brings the database up to date,
-- an `updater`, which carries out the Update button.
+   The list now shows **TemeCMS**. Your Dokploy user needs the permission to create services to use a Base URL.
+3. **Make the service.** Choose **TemeCMS**, then **Create**. Dokploy makes a Compose service with every setting filled: the image at the newest Teme release, the site's address, a new app key and two new database passwords. You type nothing.
+4. **Deploy.** Open the new service and choose **Deploy**. The first deploy takes a few minutes: Dokploy pulls the images, PostgreSQL starts, then `deploy` migrates the database, then the rest start.
+5. **Read the setup code.** Open **Logs** and choose the `deploy` container. Its log ends with the setup page's address and a setup code.
+6. **Make the first account.** Open that address, enter the code, and fill in the form. You are signed in as the site's administrator, and the site opens to readers.
 
-The panel generates the app key and both database passwords. It sets the domain. You type nothing secret to get a running site.
+The site's address is the one Dokploy made, ending in `sslip.io`, on the **Domains** tab. To use your own domain, see [Use your own domain](#use-your-own-domain). To update from the admin, see [Switch on Update from the admin](#switch-on-update-from-the-admin).
 
-## Before you start
+## Install by pasting the compose file
 
-- A Dokploy server (v0.31.2 or newer; see "What is not yet proved").
-- A domain whose address points at that server.
+1. **Make the service.** Choose **Create Service**, then **Compose**. Set the provider to **Raw** and the Compose Type to **Docker Compose**, and paste the whole of [`blueprints/teme/docker-compose.yml`](blueprints/teme/docker-compose.yml).
+2. **Paste the settings.** Open the **Environment** tab and paste this block, then fill the four empty values:
 
-## Importing the template
+   ```env
+   TEME_IMAGE=ghcr.io/temecms/teme:0.8.0-alpha.1
+   TEME_UPDATER_IMAGE=ghcr.io/temecms/teme:0.8.0-alpha.1
+   TEME_IMAGE_REPOSITORY=ghcr.io/temecms/teme
+   APP_URL=
+   APP_KEY=
+   DB_PASSWORD=
+   POSTGRES_PASSWORD=
+   ```
 
-Teme and its image (`ghcr.io/temecms/teme`) are public, so the image pulls with no sign-in. Until this template is in Dokploy's own list, you paste it in by hand: in your project choose Create Service, then Compose, then Advanced, then Import. Paste the Base64 text of this template (`template.toml` and `docker-compose.yml` together) and press Import. A box shows the compose file, the variables and the domain. Check them, then confirm. The exact text to paste is not made by a script yet: see item 2 of NOT-YET-PROVED.md.
+   - `TEME_IMAGE` and `TEME_UPDATER_IMAGE`: the same release, never `latest`. [Teme's releases](https://github.com/temecms/teme/releases) lists them; the tag has no `v`.
+   - `APP_URL`: your site's address, with `https://`.
+   - `APP_KEY`: make it once and keep it. On Linux or macOS: `echo "base64:$(openssl rand -base64 32)"`. On Windows PowerShell: `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); "base64:" + [Convert]::ToBase64String($b)`.
+   - `DB_PASSWORD` and `POSTGRES_PASSWORD`: two different passwords of letters and digits only, since Compose rewrites a `$`. On Linux or macOS, run `openssl rand -hex 32` once for each. On Windows PowerShell: `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })`.
 
-The template holds no secrets. The panel makes them when you deploy.
+   Save.
+3. **Set the domain.** On the **Domains** tab, add your site's address with the service `web`, port `8080`, and HTTPS on.
+4. **Deploy**, then read the setup code and make the first account as steps 4 to 6 of [the template](#install-from-the-template-list) say.
 
-## Deploy, step by step
+## Install from Git
 
-1. Import the template (above).
-2. Look at the Environment tab. You will see `APP_KEY`, `DB_PASSWORD`, `POSTGRES_PASSWORD`, the image names and `APP_URL`, already filled in. Leave them.
-3. Open the Domains tab. The template made a random address. Replace the host with your real domain. Keep service `web`, port `8080`, HTTPS on.
-4. In the Environment tab, change `APP_URL` to `https://` and the same domain. The two must match. Teme refuses requests for any other host.
-5. Press Deploy.
-6. Wait. The database starts, then `teme-db-setup` runs, then `deploy`, then the rest. The first deploy pulls a large image, so give it a few minutes.
+1. **Make the service.** Choose **Create Service**, then **Compose**, Compose Type **Docker Compose**. Choose your Git provider, or **Git** with `https://github.com/temecms/temecms-for-dokploy.git`, the branch `main`, and the **Compose Path** `blueprints/teme/docker-compose.yml`.
+2. **Paste the settings, set the domain, deploy and make the first account** as steps 2 to 4 of [pasting the compose file](#install-by-pasting-the-compose-file) say.
 
-## First run
+Each **Deploy** reads the compose file from Git again, so a new compose file arrives with it. An update from the admin changes only the images on a service that reads its file from Git.
 
-1. Open your site's address. You see a holding page (a 503). That is right: Teme waits for its first administrator.
-2. Find the setup code. In Dokploy open the service, then Logs, and choose the `deploy` container. The end of its log shows the address of the setup page and a code. Or open the Terminal of the `web` container, run `cd /var/www/html` and then `php artisan teme:setup-code`.
-3. Open `https://your-domain/admin/setup`.
-4. Enter the code. Fill in your name, email and password. You are the first administrator.
-5. The public pages now answer. Sign in at `/admin/login`.
-6. Run Teme's doctor once: in the `web` terminal, `cd /var/www/html` then `php artisan teme:doctor`. It first checks that the site address is right.
+## Use your own domain
 
-Never change `APP_KEY` after this point. It encrypts what Teme stores.
+1. On the **Domains** tab, edit the domain: set the host to your domain, keep the service `web` and port `8080`, and turn HTTPS on with Let's Encrypt. Point your domain's DNS at the server first.
+2. On the **Environment** tab, set `APP_URL` to the same address, with `https://`, and save.
+3. **Deploy.**
 
-## Switching on the Update button
+Teme makes every address from `APP_URL`, so nothing in your content changes.
 
-A template cannot make a Dokploy API token, so you type three values by hand. Without them the site works. You update by hand instead (see "Updating").
+## Switch on Update from the admin
 
-Set these in the service's Environment tab, then Deploy:
+1. **Make a key in Dokploy.** Open your profile settings in Dokploy, find **API/CLI**, and generate a key. Copy it.
+2. **Paste it into Teme.** In Teme's admin, open **Settings › Updates**, paste the key into **Dokploy API key**, and save. Teme asks for your password again. The key is kept encrypted and never shown again.
+3. **Check it.** Within two minutes the updater tries the key. If it can't use it, Settings › Updates says why in one sentence, and what to do.
 
-| Value | Where it comes from |
+Then **Tools › Updates › Update to …** updates the site. When this template's compose file has changed since your site was made, the update replaces the site's file too, as long as it is one this repository released ([`compose-hashes.json`](compose-hashes.json) lists them). A file edited on the server stops the update before anything changes, and Tools › Updates says to paste the new file first. [Teme's Dokploy page](https://github.com/temecms/teme/blob/main/docs/guides/operators/platforms/dokploy.md) says what the updater does, how long the site is down, and which permissions the key needs.
+
+## Your site's folders
+
+The site's data is in four Docker volumes: `pgdata` (the database), `media`, `page-cache` and `extensions`. Each is named for the site: `STACK_SLUG` and the volume's name, such as `my-site-teme-k3x9qa_media`. The template sets `STACK_SLUG` to the service's **App Name**; without it, the App Name is used. To use a shorter name, set `STACK_SLUG` on the **Environment** tab before the first deploy. Never change it afterwards: the site would start with empty volumes, and its data would stay in the old ones.
+
+## Your site's settings
+
+Everything on the **Environment** tab reaches `deploy`, `web`, the workers and the scheduler: [Configuring Teme](https://github.com/temecms/teme/blob/main/docs/guides/operators/configure.md) lists them, such as mail and `TRUSTED_PROXIES`. Two never do: `POSTGRES_PASSWORD` stays with the database, and `TEME_DOKPLOY_TOKEN` with the updater. The plugin installer reads none of them, so Composer runs without the site's secrets.
+
+Each part's CPU and memory limit is a setting too, with these defaults:
+
+| Service | CPUs | Memory |
+|---|---|---|
+| `teme-postgres` | `TEME_POSTGRES_CPUS=1` | `TEME_POSTGRES_MEMORY=1g` |
+| `web` | `TEME_WEB_CPUS=1` | `TEME_WEB_MEMORY=1g` |
+| `worker` | `TEME_WORKER_CPUS=0.5` | `TEME_WORKER_MEMORY=512m` |
+| `worker-long` | `TEME_WORKER_LONG_CPUS=0.5` | `TEME_WORKER_LONG_MEMORY=512m` |
+| `scheduler` | `TEME_SCHEDULER_CPUS=0.25` | `TEME_SCHEDULER_MEMORY=256m` |
+| `installer` | `TEME_INSTALLER_CPUS=0.5` | `TEME_INSTALLER_MEMORY=1g` |
+| `updater` | `TEME_UPDATER_CPUS=0.25` | `TEME_UPDATER_MEMORY=256m` |
+
+`TEME_GITHUB_TOKEN` is optional: a read-only token that raises GitHub's limit when Teme asks for new releases.
+
+## Moving an existing install to the template
+
+A site installed from Teme's older `docker/compose.dokploy.yml` keeps its data when it moves to this file: its volumes already carry the names this file gives them.
+
+1. On the service's **General** tab, note its **App Name**.
+2. On the **Environment** tab, add `STACK_SLUG=` followed by that App Name, exactly, and save.
+3. Replace the compose file with [`blueprints/teme/docker-compose.yml`](blueprints/teme/docker-compose.yml), and save.
+4. **Deploy.** Your posts and media are there as before.
+5. [Paste a Dokploy API key](#switch-on-update-from-the-admin) in Settings › Updates. You can then remove `TEME_DOKPLOY_TOKEN` and `TEME_DOKPLOY_COMPOSE_ID` from the **Environment** tab.
+
+## What this repository holds
+
+| File | What it is |
 |---|---|
-| `TEME_DOKPLOY_URL` | The template sets `http://dokploy:3000`. This works only if the updater can reach the panel on Dokploy's internal network. If it cannot, type the panel's own `https://` address. |
-| `TEME_DOKPLOY_COMPOSE_ID` | Open the service in the panel. The address bar reads `.../services/compose/<this-id>`. Copy the id. |
-| `TEME_DOKPLOY_TOKEN` | In Dokploy open your profile, then API keys, and make a key. |
+| `meta.json` | The template list Dokploy reads at the Base URL. |
+| `blueprints/teme/docker-compose.yml` | The compose file, for the template, Raw and Git alike. |
+| `blueprints/teme/template.toml` | The settings the template fills, and the domain. |
+| `blueprints/teme/teme.svg` | Teme's icon in the list. |
+| `compose-hashes.json` | Every compose file this repository and Teme have released, by SHA-256. Teme's updater replaces a site's compose file only when its hash is listed. |
+| `scripts/check.py` | Checks the template before it is published. |
+| `scripts/bump.py` | Sets the Teme release the template installs. |
+| `scripts/hashes.py` | Keeps `compose-hashes.json`. |
 
-Take care with the key. It can act as you in the panel. Make it as narrow as your Dokploy version allows: a Member key limited to this one service, with read on the service, write on its environment variables, and create and read on its deployments. Dokploy v0.31.1 added an "Access to API" permission when keys are made, so the narrow key must be re-proved on v0.31.2.
-
-`TEME_GITHUB_TOKEN` is optional: Teme's releases are public, and a token only raises GitHub's limit on requests.
-
-Only the scheduler and the updater receive the two tokens. The other services get them blanked on purpose.
-
-Do not edit the Environment tab while an update is running. The updater rewrites that text.
-
-Do not use Dokploy's scheduled jobs for Teme. The `scheduler` service runs Teme's schedule.
-
-## Mail
-
-Teme cannot send mail until you set it. In the Environment tab add `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` and `MAIL_FROM_NAME`. Deploy again. The stack passes every such setting to every Teme service. Teme's doctor warns until mail is set.
-
-All other settings (trusted proxies, update channel, AI keys, size limits) work the same way. Teme's own guide, `docs/guides/operators/configure.md`, lists them.
-
-## Backups
-
-Backups are not switched on by default. After your first administrator exists, open Tools, then Backups, and set up a destination that is not on the same server. Keep the recovery key somewhere safe and offline. Then run `teme:backup:verify`.
-
-Teme's backup guide, `docs/guides/operators/backups.md`, has the steps and says what a backup holds. Dokploy's own database backups do not see the database inside this service.
-
-## Updating
-
-**From the admin.** After you set the three values above: Tools, then Updates, then Update to the new release. Teme asks for your password. The site is down for a short while as the service deploys.
-
-**By hand.** Set `TEME_IMAGE` and `TEME_UPDATER_IMAGE` in the Environment tab to the new exact release tag, and Deploy.
-
-**Updating this template.** The Teme release this template pins is only for new sites. A site already deployed keeps the compose text it was made with. Teme's release notes should say when a release changes `compose.dokploy.yml`. When one does, copy the change into the service's compose text by hand.
-
-The maintainer bumps the pin with `scripts/bump.sh <tag>`, compares with `scripts/sync-compose.sh`, and runs `scripts/check.sh`.
-
-## The image's home
-
-The image lives at `ghcr.io/temecms/teme`, its permanent home. It is set in one place: the line `image_repository` at the top of `template.toml`. Sites also hold it in `TEME_IMAGE_REPOSITORY`, and their Update button builds image names from it.
-
-## Running two sites on one server
-
-NOT YET PROVED. Watch for:
-
-- Both stacks put a service called `web` on Dokploy's shared network, and Teme's updater looks for it by that name.
-- Each stack's database is called `teme-postgres`. Service names must be unique on a shared network. A `postgres` on that network was once reached by mistake.
-- Dokploy's "Isolated Deployment" setting may make this safe. Test it before you rely on it.
-
-## Troubleshooting
-
-| What you see | What to do |
-|---|---|
-| The deploy fails pulling the image. | Check the tag in `TEME_IMAGE` exists on `ghcr.io/temecms/teme` (no leading `v`), and that the server can reach `ghcr.io`. |
-| The whole deploy stops with a message about `TEME_UPDATER_IMAGE`. | That variable must always be set, to the same image as `TEME_IMAGE`. The template sets it. Do not delete it. |
-| You see a redirect to a wrong address, or Teme refuses the request. | `APP_URL` and the Domains tab disagree. Set both to the same host. |
-| After changing the domain, the site stops answering. | You changed the Domains tab but not `APP_URL`. Change `APP_URL` too, Deploy, then run `teme:doctor`. |
-| The site shows a holding page for a long time. | No administrator exists yet. Read the setup code (see "First run"). |
-| The site shows "bad gateway" while the service looks healthy. | A health check may be answering without PHP. Teme's `web` checks `/up`, through PHP and the database. Do not replace it with a lighter check. Redeploy the service. |
-| The deploy warns about empty variables. | Harmless for optional ones. Only `TEME_UPDATER_IMAGE` is required. |
-| A new setting does not seem to reach the site. | Deploy again after saving the Environment tab. Settings are read when containers start. |
-| A security release came out. | Restarting does not change the PHP inside an image. Update to the new release through the Update button or by hand, the same day. |
-| Two sites on one server confuse each other. | See "Running two sites on one server". |
-| A password with a `$` in it breaks. | Use letters and digits only. Compose rewrites `$`. |
-
-Teme's own troubleshooting guide is `docs/guides/operators/troubleshooting.md` in Teme's repository.
-
-## What is not yet proved
-
-- That the panel's `base64` helper gives a valid app key.
-- That a deploy from the import reaches the holding page.
-- That the setup code can be read as described.
-- That the first account can be made.
-- That the Update button works with the typed values, and with `http://dokploy:3000`.
-- That a backup can be set up and verified.
-- That two sites run side by side on one server.
-- Which Dokploy version it all works on.
-- That blanking the tokens on the services that should not hold them does not upset Teme.
-
-NOT-YET-PROVED.md says how to prove each one and what to change if it fails.
-
-## How this relates to Teme's own guide
-
-This README holds the panel's steps and the template. Teme's guide, `docs/guides/operators/platforms/dokploy.md` in Teme's repository, holds the by-hand install and what Teme does. Teme's other operator guides (configure, updates, backups, troubleshooting) hold everything else. This project links to them and does not copy them.
-
-## Thanks
-
-The idea of a one-click stack for a CMS on Dokploy comes from DokployPress, a WordPress stack for Dokploy, itself forked and extended from `itsmereal/dokploy-wp`. No code is copied from either.
+A scheduled workflow reads Teme's newest release each day and moves the template to it. When the compose file changes, run `python3 scripts/hashes.py update` so the list names the new file; the check refuses a change that drops a listed file.
 
 ## Licence
 
-MIT, as Teme: see [LICENSE](LICENSE). `docker-compose.yml` is adapted from Teme's `docker/compose.dokploy.yml`, under the same licence.
+MIT, as Teme. See [LICENSE](LICENSE).

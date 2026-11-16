@@ -1,0 +1,67 @@
+name: follow-teme
+
+# Each day, moves the template to Teme's newest release: reads Teme's public
+# release list, sets the version with scripts/bump.py, checks the template,
+# and commits the change to main. A template on that release already is left
+# as it is.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: follow-teme
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: Read Teme's newest release
+        id: teme
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Teme's repository is public: this repository's own token only raises the rate limit.
+          gh api --paginate "repos/temecms/teme/releases?per_page=100" \
+            --jq '.[] | select(.draft == false) | .tag_name' > "$RUNNER_TEMP/tags.txt"
+          newest="$(python3 - "$RUNNER_TEMP/tags.txt" <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          import bump
+          versions = []
+          for line in open(sys.argv[1], encoding="utf-8"):
+              tag = line.strip()
+              if tag.startswith("v") and bump.VERSION.match(tag[1:]):
+                  versions.append(tag[1:])
+          print(max(versions, key=bump.key) if versions else "")
+          PY
+          )"
+          test -n "$newest"
+          echo "version=${newest}" >> "$GITHUB_OUTPUT"
+
+      - name: Move the template to it, check it, and commit it to main
+        env:
+          VERSION: ${{ steps.teme.outputs.version }}
+        run: |
+          python3 scripts/bump.py "$VERSION"
+          if git diff --quiet; then
+            exit 0
+          fi
+          python3 -m unittest discover -s tests
+          python3 scripts/check.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add meta.json blueprints/teme/template.toml README.md
+          git commit -m "chore: install Teme ${VERSION}"
+          git push origin HEAD:main
