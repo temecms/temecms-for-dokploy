@@ -34,7 +34,15 @@ LIMITS = {
     "installer": ("TEME_INSTALLER", "0.5", "1g"),
     "updater": ("TEME_UPDATER", "0.25", "256m"),
 }
-VOLUME_NAME = "${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_"
+# The settings Teme's media disks read: every part that runs the site needs each, empty when unset, so a worker
+# writes where web reads.
+MEDIA = [
+    "MEDIA_STORAGE", "MEDIA_DISK", "MEDIA_ORIGINALS_DISK", "MEDIA_URL",
+    "MEDIA_BUCKET", "MEDIA_ORIGINALS_BUCKET", "MEDIA_BUCKET_ROOT", "MEDIA_ORIGINALS_BUCKET_ROOT",
+    "MEDIA_BUCKET_ENDPOINT", "MEDIA_BUCKET_REGION", "MEDIA_BUCKET_PATH_STYLE",
+    "MEDIA_BUCKET_ACCESS_KEY_ID", "MEDIA_BUCKET_SECRET_ACCESS_KEY", "MEDIA_BUCKET_URL", "MEDIA_BUCKET_ACL",
+]
+VOLUME_NAME ="${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_"
 MAKERS_TALK = re.compile(r"\bI-\d+|\bwe\b|decided|the owner|for now|not prov|not finished|\b20\d\d-\d\d-\d\d\b", re.I)
 EXAMPLE_VALUES = {
     "TEME_IMAGE": "ghcr.io/temecms/teme:0.0.0",
@@ -181,6 +189,10 @@ def check_compose(compose_text: str) -> None:
                     problem(f"{name} must set {blank} empty, so the Environment tab's never reaches it.")
             if environment.get("APP_NAME") != "Teme":
                 problem(f"{name} must keep APP_NAME: Teme; Dokploy writes its App Name there.")
+            for media in MEDIA:
+                default = "server" if media == "MEDIA_STORAGE" else ""
+                if environment.get(media) != f"${{{media}:-{default}}}":
+                    problem(f"{name} must pass {media}, defaulting to {default or 'empty'}.")
         elif env_file:
             problem(f"{name} must not read the Environment tab.")
 

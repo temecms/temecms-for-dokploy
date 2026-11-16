@@ -161,6 +161,11 @@ class CheckTest(unittest.TestCase):
 
         self.assertTrue(any("page-cache" in sentence for sentence in self.run_check()))
 
+    def test_catches_a_media_setting_left_out(self) -> None:
+        self.edit(check.BLUEPRINT, "    MEDIA_BUCKET_ACL: ${MEDIA_BUCKET_ACL:-}\n", "")
+
+        self.assertIn("web must pass MEDIA_BUCKET_ACL, defaulting to empty.", self.run_check())
+
     def test_catches_a_fixed_limit(self) -> None:
         self.edit(check.BLUEPRINT, "cpus: '${TEME_WEB_CPUS:-1}'", "cpus: '1'")
 
