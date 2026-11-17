@@ -14,7 +14,7 @@ Dokploy can make a service in several ways. This table says which ones run Teme,
 | **Compose**, provider **Raw** | Create Service › Compose, paste the compose file | A short block of settings pasted once on the Environment tab. This is the only route where you paste values. See [Install by pasting the compose file](#install-by-pasting-the-compose-file). |
 | **Compose**, provider **GitHub**, **GitLab**, **Bitbucket**, **Gitea** or **Git** | Create Service › Compose, point it at this repository and the compose path | The same block of settings as Raw. See [Install from Git](#install-from-git). |
 | **Compose**, Compose Type **Stack** (Docker Swarm) | Not supported | Teme's file needs Docker Compose: its `deploy` step runs once and the other parts wait for it to finish, which Swarm can't do, and Swarm ignores the order the parts start in. Choose Compose Type **Docker Compose**. |
-| **Application**: Docker image, GitHub, GitLab, Bitbucket, Gitea or Git with the Dockerfile, or Drop (a ZIP) | Teme as one container | See *Install as one Application* in [Teme's Dokploy page](https://github.com/temecms/teme/blob/main/docs/guides/operators/platforms/dokploy.md). |
+| **Application**: Docker image, GitHub, GitLab, Bitbucket, Gitea or Git with the Dockerfile, or Drop (a ZIP) | Teme as one container | See [Run Teme as one container](https://github.com/temecms/teme/blob/main/docs/guides/operators/platforms/one-container.md), section *Dokploy*. |
 | **Database**, and Dokploy's scheduled jobs | Not used with the Compose file | The file brings its own PostgreSQL, and Teme runs its own schedule. |
 
 ## Install from the template list
@@ -108,33 +108,7 @@ Each part's CPU and memory limit is a setting too, with these defaults:
 
 `TEME_GITHUB_TOKEN` is optional: a read-only token that raises GitHub's limit when Teme asks for new releases.
 
-## What this repository holds
-
-| File | What it is |
-|---|---|
-| `meta.json` | The template list Dokploy reads at the Base URL. |
-| `blueprints/teme/docker-compose.yml` | The compose file, for the template, Raw and Git alike. |
-| `blueprints/teme/template.toml` | The settings the template fills, and the domain. |
-| `blueprints/teme/teme.svg` | Teme's icon in the list. |
-| `compose-hashes.json` | Every compose file this repository and Teme have released, by SHA-256. Teme's updater replaces a site's compose file only when its hash is listed. |
-| `scripts/check.py` | Checks the template before it is published. |
-| `scripts/bump.py` | Sets the Teme release the template installs. |
-| `scripts/hashes.py` | Keeps `compose-hashes.json`. |
-
-### How a compose file is hashed
-
-Teme compares hashes made from a compose file's bytes, in four steps:
-
-1. Replace every CR LF (`0x0D 0x0A`) with LF (`0x0A`).
-2. Remove space, tab, LF, CR, NUL and vertical tab (`0x20 0x09 0x0A 0x0D 0x00 0x0B`) from the end.
-3. Add one LF.
-4. Take SHA-256, written as 64 lowercase hex digits.
-
-For example, the bytes `services:\r\n  web: {}\r\n\r\n` hash to `78ae680a3841176cc921326a7837fc012f1f21701a4f5a4d6943f9e6c20b8af8`. Teme's own test checks the same pair.
-
-### Following Teme's releases
-
-A scheduled workflow reads Teme's newest release each day. When its image is published, the workflow opens a pull request that moves the template to it, and the pull request merges itself once the checks pass. GitHub pauses scheduled workflows in a repository with no activity for 60 days; run **follow-teme** by hand from the Actions tab to start it again. [CONTRIBUTING.md](CONTRIBUTING.md) says how to change the compose file.
+The template always installs Teme's newest release; you don't need to do anything to keep it current. To move a site you've installed to a newer release, use **Update** in its admin ([Switch on Update from the admin](#switch-on-update-from-the-admin)).
 
 ## Licence
 

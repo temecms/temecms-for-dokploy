@@ -114,7 +114,7 @@ class HashesTest(unittest.TestCase):
         self.assertEqual(b"services:\r\n  web: {}\r\n\r\n", data)
         self.assertEqual("78ae680a3841176cc921326a7837fc012f1f21701a4f5a4d6943f9e6c20b8af8", expected)
         self.assertEqual(expected, hashes.hash_of(data))
-        self.assertIn(expected, (ROOT / "README.md").read_text(encoding="utf-8"))
+        self.assertIn(expected, (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8"))
 
     def test_adds_a_hash_once_and_never_removes_one(self) -> None:
         listed = {"format": 1, "current": "a" * 64, "released": ["a" * 64, "b" * 64]}
