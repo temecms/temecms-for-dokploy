@@ -28,9 +28,10 @@ Dokploy can make a service in several ways. This table says which ones run Teme,
 
    The list now shows **TemeCMS**. Your Dokploy user needs the permission to create services to use a Base URL.
 3. **Make the service.** Choose **TemeCMS**, then **Create**. Dokploy makes a Compose service with every setting filled: the image at the newest Teme release, the site's address, a new app key and two new database passwords. You type nothing.
-4. **Deploy.** Open the new service and choose **Deploy**. The first deploy takes a few minutes: Dokploy pulls the images, PostgreSQL starts, then `deploy` migrates the database, then the rest start.
-5. **Read the setup code.** Open **Logs** and choose the `deploy` container. Its log ends with the setup page's address and a setup code.
-6. **Make the first account.** Open that address, enter the code, and fill in the form. You are signed in as the site's administrator, and the site opens to readers.
+4. **Optional: choose a shorter folder name, now or never.** Your site's data lives in four folders on the server, named after the site, for example `my-site-teme-k3x9qa_media`. If you want shorter names, open the **Environment** tab and change `STACK_SLUG` to a short name of your own (letters, digits and dashes, such as `my-site`), then save. Do this only before the first deploy. After it, leave `STACK_SLUG` alone: a new name means new, empty folders, and the site would start blank.
+5. **Deploy.** Open the new service and choose **Deploy**. The first deploy takes a few minutes: Dokploy pulls the images, PostgreSQL starts, then `deploy` migrates the database, then the rest start.
+6. **Read the setup code.** Open **Logs** and choose the `deploy` container. Its log ends with the setup page's address and a setup code.
+7. **Make the first account.** Open that address, enter the code, and fill in the form. You are signed in as the site's administrator, and the site opens to readers.
 
 The site's address is the one Dokploy made, ending in `sslip.io`, on the **Domains** tab. To use your own domain, see [Use your own domain](#use-your-own-domain). To update from the admin, see [Switch on Update from the admin](#switch-on-update-from-the-admin).
 
@@ -56,7 +57,7 @@ The site's address is the one Dokploy made, ending in `sslip.io`, on the **Domai
 
    Save.
 3. **Set the domain.** On the **Domains** tab, add your site's address with the service `web`, port `8080`, and HTTPS on.
-4. **Deploy**, then read the setup code and make the first account as steps 4 to 6 of [the template](#install-from-the-template-list) say.
+4. **Deploy**, then read the setup code and make the first account as steps 5 to 7 of [the template](#install-from-the-template-list) say.
 
 ## Install from Git
 
@@ -83,7 +84,9 @@ Then **Tools › Updates › Update to …** updates the site. When this templat
 
 ## Your site's folders
 
-The site's data is in four Docker volumes: `pgdata` (the database), `media`, `page-cache` and `extensions`. Each is named for the site: `STACK_SLUG` and the volume's name, such as `my-site-teme-k3x9qa_media`. The template sets `STACK_SLUG` to the service's **App Name**; without it, the App Name is used. To use a shorter name, set `STACK_SLUG` on the **Environment** tab before the first deploy. Never change it afterwards: the site would start with empty volumes, and its data would stay in the old ones.
+The site's data is in four Docker volumes on the server: `pgdata` (the database), `media` (uploads), `page-cache` and `extensions` (installed plugins and themes). Their names start with the site's `STACK_SLUG`, for example `my-site_media`, so you can find them with `docker volume ls`.
+
+`STACK_SLUG` is set once, when the service is made: it is the service's **App Name** unless you change it before the first deploy (step 4 above). **Never change it on a site that has been deployed.** The site would look for folders with the new name, find none, and start empty; your data would still be on the server, in the folders with the old name.
 
 ## Your site's settings
 
@@ -104,16 +107,6 @@ Each part's CPU and memory limit is a setting too, with these defaults:
 | `updater` | `TEME_UPDATER_CPUS=0.25` | `TEME_UPDATER_MEMORY=256m` |
 
 `TEME_GITHUB_TOKEN` is optional: a read-only token that raises GitHub's limit when Teme asks for new releases.
-
-## Moving an existing install to the template
-
-A site installed from Teme's older `docker/compose.dokploy.yml` keeps its data when it moves to this file: its volumes already carry the names this file gives them.
-
-1. On the service's **General** tab, note its **App Name**.
-2. On the **Environment** tab, add `STACK_SLUG=` followed by that App Name, exactly, and save.
-3. Replace the compose file with [`blueprints/teme/docker-compose.yml`](blueprints/teme/docker-compose.yml), and save.
-4. **Deploy.** Your posts and media are there as before.
-5. [Paste a Dokploy API key](#switch-on-update-from-the-admin) in Settings › Updates. You can then remove `TEME_DOKPLOY_TOKEN` and `TEME_DOKPLOY_COMPOSE_ID` from the **Environment** tab.
 
 ## What this repository holds
 
