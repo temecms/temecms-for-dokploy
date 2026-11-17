@@ -13,8 +13,10 @@
 # Each part's CPU and memory limit can be changed the same way, for example
 # TEME_WEB_CPUS=2 and TEME_WEB_MEMORY=2g.
 
-# Dokploy writes the service's App Name as APP_NAME; Teme keeps its own.
-x-teme-environment: &teme-environment
+# What every Teme part needs to run at all: its address, its app key (which
+# reads the settings Teme keeps encrypted) and its database login. Dokploy
+# writes the service's App Name as APP_NAME; Teme keeps its own.
+x-teme-core: &teme-core
     APP_NAME: Teme
     APP_URL: ${APP_URL:?set APP_URL to the site’s https:// address}
     APP_KEY: ${APP_KEY:?set APP_KEY; the guide shows how to make one}
@@ -23,9 +25,13 @@ x-teme-environment: &teme-environment
     DB_DATABASE: teme_site
     DB_USERNAME: teme_app
     DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD to letters and digits}
+    PGCONNECT_TIMEOUT: '3'
+
+# The parts that run the site: the core, and everything the site reads.
+x-teme-environment: &teme-environment
+    <<: *teme-core
     TEME_VERIFY_DATABASE: teme_verify
     PAGE_CACHE_DRIVER: static
-    PGCONNECT_TIMEOUT: '3'
     TEME_IMAGE_REPOSITORY: ${TEME_IMAGE_REPOSITORY:-}
     TEME_EXTENSIONS_PATH: /var/teme/extensions
     # Kept out of every Teme part, even when the Environment tab holds them:
@@ -231,8 +237,10 @@ services:
 
     # Installs, updates and removes the plugins and themes asked for from the
     # admin (Teme's docs/guides/operators/extensions.md): the only part that writes
-    # the extensions volume. It never reads the Environment tab: Composer runs
-    # here with none of the site's other secrets. The others start once it has
+    # the extensions volume. It never reads the Environment tab, and has only
+    # the core: the database, where requests are kept, and the app key, which
+    # opens a saved source's key. Composer, which it runs, gets neither: Teme
+    # starts it with none of the site's secrets. The others start once it has
     # checked the installed ones against this image.
     installer:
         <<: *teme
@@ -242,7 +250,9 @@ services:
         init: true
         stop_grace_period: 2m
         environment:
-            <<: *teme-environment
+            <<: *teme-core
+            PAGE_CACHE_DRIVER: static
+            TEME_EXTENSIONS_PATH: /var/teme/extensions
             TEME_EXTENSIONS_ROLE: installer
         volumes:
             - extensions:/var/teme/extensions
@@ -272,8 +282,11 @@ services:
         stop_grace_period: 1m
         healthcheck:
             disable: true
+        # The core, which opens the Dokploy key Settings › Updates keeps
+        # encrypted, and the platform's settings; none of the media keys.
         environment:
-            <<: *teme-environment
+            <<: *teme-core
+            TEME_IMAGE_REPOSITORY: ${TEME_IMAGE_REPOSITORY:-}
             TEME_GITHUB_TOKEN: ${TEME_GITHUB_TOKEN:-}
             TEME_UPDATER_PLATFORM: dokploy
             TEME_DOKPLOY_URL: ${TEME_DOKPLOY_URL:-http://dokploy:3000}
@@ -301,10 +314,10 @@ networks:
 # STACK_SLUG these are the names Docker gave them before they were named here.
 volumes:
     pgdata:
-        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_pgdata
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_pgdata
     media:
-        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_media
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_media
     page-cache:
-        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_page-cache
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_page-cache
     extensions:
-        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_extensions
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_extensions

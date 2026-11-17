@@ -1,9 +1,16 @@
 name: follow-teme
 
-# Each day, moves the template to Teme's newest release: reads Teme's public
-# release list, sets the version with scripts/bump.py, checks the template,
-# and commits the change to main. A template on that release already is left
-# as it is.
+# Each day, reads Teme's newest release. When its image is published and the
+# template installs an older one, opens a pull request that moves the template
+# to it (scripts/bump.py: meta.json, template.toml, the README and the
+# changelog), set to merge itself once the checks pass. When Teme's release
+# carries a Dokploy compose file this repository hasn't listed, it opens an
+# issue instead and changes nothing.
+#
+# A pull request opened with the workflow's own token starts no other
+# workflow, so the checks never run on it. Set a FOLLOW_TEME_TOKEN secret (a
+# fine-grained token with Contents, Pull requests and Issues: write on this
+# repository) and turn on "Allow auto-merge" in the repository's settings.
 on:
   schedule:
     - cron: "17 6 * * *"
@@ -11,6 +18,8 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: follow-teme
@@ -19,20 +28,20 @@ concurrency:
 jobs:
   follow:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.FOLLOW_TEME_TOKEN || github.token }}
     steps:
       - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          persist-credentials: true
+          token: ${{ secrets.FOLLOW_TEME_TOKEN || github.token }}
 
       - name: Read Teme's newest release
         id: teme
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          # Teme's repository is public: this repository's own token only raises the rate limit.
+          # Teme's repository is public: no token from it is needed.
           gh api --paginate "repos/temecms/teme/releases?per_page=100" \
             --jq '.[] | select(.draft == false) | .tag_name' > "$RUNNER_TEMP/tags.txt"
           newest="$(python3 - "$RUNNER_TEMP/tags.txt" <<'PY'
@@ -50,7 +59,35 @@ jobs:
           test -n "$newest"
           echo "version=${newest}" >> "$GITHUB_OUTPUT"
 
-      - name: Move the template to it, check it, and commit it to main
+      - name: Check its image is published
+        env:
+          VERSION: ${{ steps.teme.outputs.version }}
+        run: docker manifest inspect "ghcr.io/temecms/teme:${VERSION}" > /dev/null
+
+      - name: Stop if Teme's release brings a compose file this template hasn't listed
+        id: compose
+        env:
+          VERSION: ${{ steps.teme.outputs.version }}
+        run: |
+          code="$(curl -sS -o "$RUNNER_TEMP/teme-compose.yml" -w '%{http_code}' "https://raw.githubusercontent.com/temecms/teme/v${VERSION}/docker/compose.dokploy.yml")"
+          if [ "$code" = 404 ]; then
+            echo "listed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$code" = 200
+          hash="$(python3 scripts/hashes.py of "$RUNNER_TEMP/teme-compose.yml")"
+          if python3 -c "import json, sys; sys.exit(0 if sys.argv[1] in json.load(open('compose-hashes.json'))['released'] else 1)" "$hash"; then
+            echo "listed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "listed=false" >> "$GITHUB_OUTPUT"
+          title="Teme ${VERSION} brings a Dokploy compose file this template hasn't listed"
+          if [ -z "$(gh issue list --state open --search "\"${title}\" in:title" --json number --jq '.[].number')" ]; then
+            gh issue create --title "$title" --body "Teme ${VERSION}'s \`docker/compose.dokploy.yml\` (SHA-256 by this repository's rule: \`${hash}\`) isn't in \`compose-hashes.json\`. Bring its changes into \`blueprints/teme/docker-compose.yml\`, run \`python3 scripts/hashes.py update\`, and the template moves to ${VERSION} at the next run."
+          fi
+
+      - name: Open a pull request that moves the template to it
+        if: steps.compose.outputs.listed == 'true'
         env:
           VERSION: ${{ steps.teme.outputs.version }}
         run: |
@@ -58,10 +95,19 @@ jobs:
           if git diff --quiet; then
             exit 0
           fi
+          python3 scripts/hashes.py update
           python3 -m unittest discover -s tests
           python3 scripts/check.py
+          branch="follow-teme/v${VERSION}"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add meta.json blueprints/teme/template.toml README.md
+          git switch -c "$branch"
+          git add meta.json blueprints/teme/template.toml README.md CHANGELOG.md compose-hashes.json
           git commit -m "chore: install Teme ${VERSION}"
-          git push origin HEAD:main
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "Install Teme ${VERSION}" \
+            --body "Moves the template to Teme ${VERSION}: its image is published, and its compose file is listed. Made by the follow-teme workflow."
+          gh pr merge "$branch" --auto --squash

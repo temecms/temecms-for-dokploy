@@ -2,7 +2,7 @@
 
 Install [Teme](https://github.com/temecms/teme) on a [Dokploy](https://dokploy.com) server from Dokploy's template list. Teme is a content management system built on Laravel and PostgreSQL. This repository holds its Dokploy template: one Compose service that runs the site, its own PostgreSQL, two queue workers, the scheduler, the plugin installer and the updater behind the admin's Update button.
 
-These instructions are written for Dokploy v0.31.2. The image, `ghcr.io/temecms/teme`, is public, so Dokploy needs no registry sign-in.
+These instructions are written for Dokploy v0.31.2. The server needs Docker Compose 2.24 or later, which reads an `env_file` marked `required: false`. The image, `ghcr.io/temecms/teme`, is public, so Dokploy needs no registry sign-in.
 
 ## Ways to install
 
@@ -87,7 +87,9 @@ The site's data is in four Docker volumes: `pgdata` (the database), `media`, `pa
 
 ## Your site's settings
 
-Everything on the **Environment** tab reaches `deploy`, `web`, the workers and the scheduler: [Configuring Teme](https://github.com/temecms/teme/blob/main/docs/guides/operators/configure.md) lists them, such as mail and `TRUSTED_PROXIES`. Two never do: `POSTGRES_PASSWORD` stays with the database, and `TEME_DOKPLOY_TOKEN` with the updater. The plugin installer reads none of them, so Composer runs without the site's secrets.
+Everything on the **Environment** tab reaches `deploy`, `web`, the workers and the scheduler: [Configuring Teme](https://github.com/temecms/teme/blob/main/docs/guides/operators/configure.md) lists them, such as mail and `TRUSTED_PROXIES`. Two never do: `POSTGRES_PASSWORD` stays with the database, and `TEME_DOKPLOY_TOKEN` with the updater.
+
+The plugin installer and the updater never read the Environment tab. Each has only Teme's address, its app key and its database login, and its own settings, such as Dokploy's for the updater. The installer needs the app key to open a key you saved for a private plugin source, and the database to keep its requests; Composer, which it runs, gets neither. The updater needs the app key to open the Dokploy API key Teme keeps encrypted. Neither has the media storage keys, mail, or the database's own password.
 
 Each part's CPU and memory limit is a setting too, with these defaults:
 
@@ -126,7 +128,20 @@ A site installed from Teme's older `docker/compose.dokploy.yml` keeps its data w
 | `scripts/bump.py` | Sets the Teme release the template installs. |
 | `scripts/hashes.py` | Keeps `compose-hashes.json`. |
 
-A scheduled workflow reads Teme's newest release each day and moves the template to it. When the compose file changes, run `python3 scripts/hashes.py update` so the list names the new file; the check refuses a change that drops a listed file.
+### How a compose file is hashed
+
+Teme compares hashes made from a compose file's bytes, in four steps:
+
+1. Replace every CR LF (`0x0D 0x0A`) with LF (`0x0A`).
+2. Remove space, tab, LF, CR, NUL and vertical tab (`0x20 0x09 0x0A 0x0D 0x00 0x0B`) from the end.
+3. Add one LF.
+4. Take SHA-256, written as 64 lowercase hex digits.
+
+For example, the bytes `services:\r\n  web: {}\r\n\r\n` hash to `78ae680a3841176cc921326a7837fc012f1f21701a4f5a4d6943f9e6c20b8af8`. Teme's own test checks the same pair.
+
+### Following Teme's releases
+
+A scheduled workflow reads Teme's newest release each day. When its image is published, the workflow opens a pull request that moves the template to it, and the pull request merges itself once the checks pass. GitHub pauses scheduled workflows in a repository with no activity for 60 days; run **follow-teme** by hand from the Actions tab to start it again. [CONTRIBUTING.md](CONTRIBUTING.md) says how to change the compose file.
 
 ## Licence
 

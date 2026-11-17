@@ -23,7 +23,7 @@ def copy_of_repository() -> Path:
     """The files the scripts read, in a folder of their own."""
     root = Path(tempfile.mkdtemp())
     (root / "blueprints" / "teme").mkdir(parents=True)
-    for name in ("meta.json", "compose-hashes.json", "README.md"):
+    for name in ("meta.json", "compose-hashes.json", "README.md", "CHANGELOG.md"):
         shutil.copy(ROOT / name, root / name)
     for name in ("docker-compose.yml", "template.toml", "teme.svg"):
         shutil.copy(ROOT / "blueprints" / "teme" / name, root / "blueprints" / "teme" / name)
@@ -68,6 +68,16 @@ class BumpTest(unittest.TestCase):
             check.BLUEPRINT, check.TEMPLATE, check.README, check.LIST, check.ROOT = saved
             check.problems.clear()
 
+    def test_says_so_in_the_changelog_under_unreleased(self) -> None:
+        (self.root / "CHANGELOG.md").write_text("# Changelog\n\nIntro.\n\n## Unreleased\n\n### Added\n\n- Something.\n\n## 2026-11-15\n\n- Old.\n", encoding="utf-8")
+
+        bump.bump("99.0.0", self.root)
+
+        self.assertEqual(
+            "# Changelog\n\nIntro.\n\n## Unreleased\n\n- Installs Teme 99.0.0.\n\n### Added\n\n- Something.\n\n## 2026-11-15\n\n- Old.\n",
+            (self.root / "CHANGELOG.md").read_text(encoding="utf-8"),
+        )
+
     def test_leaves_a_newer_template_as_it_is(self) -> None:
         before = self.read()
 
@@ -93,9 +103,18 @@ class BumpTest(unittest.TestCase):
 
 class HashesTest(unittest.TestCase):
     def test_hashes_as_teme_does_whatever_the_line_endings(self) -> None:
-        self.assertEqual(hashes.hash_of("a: 1\r\nb: 2\r\n\r\n"), hashes.hash_of("a: 1\nb: 2\n"))
-        self.assertEqual(hashlib.sha256(b"a: 1\nb: 2\n").hexdigest(), hashes.hash_of("a: 1\nb: 2"))
-        self.assertNotEqual(hashes.hash_of("a: 1\n"), hashes.hash_of("a: 2\n"))
+        self.assertEqual(hashes.hash_of(b"a: 1\r\nb: 2\r\n\r\n"), hashes.hash_of(b"a: 1\nb: 2\n"))
+        self.assertEqual(hashlib.sha256(b"a: 1\nb: 2\n").hexdigest(), hashes.hash_of(b"a: 1\nb: 2"))
+        self.assertEqual(hashes.hash_of(b"a: 1 \t\x00\x0b\n"), hashes.hash_of(b"a: 1"))
+        self.assertNotEqual(hashes.hash_of(b"a: 1\n"), hashes.hash_of(b"a: 2\n"))
+
+    def test_gives_the_test_vector_teme_checks_too(self) -> None:
+        data, expected = hashes.TEST_VECTOR
+
+        self.assertEqual(b"services:\r\n  web: {}\r\n\r\n", data)
+        self.assertEqual("78ae680a3841176cc921326a7837fc012f1f21701a4f5a4d6943f9e6c20b8af8", expected)
+        self.assertEqual(expected, hashes.hash_of(data))
+        self.assertIn(expected, (ROOT / "README.md").read_text(encoding="utf-8"))
 
     def test_adds_a_hash_once_and_never_removes_one(self) -> None:
         listed = {"format": 1, "current": "a" * 64, "released": ["a" * 64, "b" * 64]}
@@ -111,14 +130,14 @@ class HashesTest(unittest.TestCase):
 
         updated = hashes.update({"format": 1, "current": None, "released": ["b" * 64]}, blueprint)
 
-        expected = hashes.hash_of(blueprint.read_text(encoding="utf-8"))
+        expected = hashes.hash_of(blueprint.read_bytes())
         self.assertEqual(expected, updated["current"])
         self.assertEqual(["b" * 64, expected], updated["released"])
 
     def test_the_published_list_names_the_blueprint(self) -> None:
         listed = json.loads((ROOT / "compose-hashes.json").read_text(encoding="utf-8"))
 
-        self.assertEqual(hashes.hash_of(hashes.BLUEPRINT.read_text(encoding="utf-8")), listed["current"])
+        self.assertEqual(hashes.hash_of(hashes.BLUEPRINT.read_bytes()), listed["current"])
         self.assertIn(listed["current"], listed["released"])
 
 
@@ -160,6 +179,31 @@ class CheckTest(unittest.TestCase):
         self.edit(check.BLUEPRINT, "}}_page-cache", "}}_page_cache")
 
         self.assertTrue(any("page-cache" in sentence for sentence in self.run_check()))
+
+    def test_catches_a_site_secret_reaching_the_installer(self) -> None:
+        self.edit(check.BLUEPRINT, "            TEME_EXTENSIONS_ROLE: installer\n", "            TEME_EXTENSIONS_ROLE: installer\n            MEDIA_BUCKET_SECRET_ACCESS_KEY: ${MEDIA_BUCKET_SECRET_ACCESS_KEY:-}\n")
+
+        found = self.run_check()
+
+        self.assertIn("The installer must not receive MEDIA_BUCKET_SECRET_ACCESS_KEY.", found)
+        self.assertTrue(any(sentence.startswith("The installer's environment must be the core") for sentence in found))
+
+    def test_catches_the_site_settings_reaching_the_updater(self) -> None:
+        self.edit(check.BLUEPRINT, "        environment:\n            <<: *teme-core\n            TEME_IMAGE_REPOSITORY", "        environment:\n            <<: *teme-environment\n            TEME_IMAGE_REPOSITORY")
+
+        self.assertTrue(any(sentence.startswith("The updater's environment must be the core") for sentence in self.run_check()))
+
+    def test_assumes_dokploy_fills_app_name_and_names_the_folders_without_it_too(self) -> None:
+        """ASSUMPTION: Dokploy passes the App Name to the template as APP_NAME; the live run checks it. The check
+        also holds when Dokploy leaves ${APP_NAME} as it is, through the APP_NAME line Dokploy writes first."""
+        template = check.tomllib.loads(check.TEMPLATE.read_text(encoding="utf-8"))
+        unfilled = dict(line.split("=", 1) for line in check.template_environment(template, app_name=None))
+
+        self.assertEqual("${APP_NAME}", unfilled["STACK_SLUG"])
+
+        check.check_dokploy_env(template)
+
+        self.assertEqual([], check.problems)
 
     def test_catches_a_media_setting_left_out(self) -> None:
         self.edit(check.BLUEPRINT, "    MEDIA_BUCKET_ACL: ${MEDIA_BUCKET_ACL:-}\n", "")

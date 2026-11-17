@@ -42,7 +42,14 @@ MEDIA = [
     "MEDIA_BUCKET_ENDPOINT", "MEDIA_BUCKET_REGION", "MEDIA_BUCKET_PATH_STYLE",
     "MEDIA_BUCKET_ACCESS_KEY_ID", "MEDIA_BUCKET_SECRET_ACCESS_KEY", "MEDIA_BUCKET_URL", "MEDIA_BUCKET_ACL",
 ]
-VOLUME_NAME ="${STACK_SLUG:-${COMPOSE_PROJECT_NAME:?set STACK_SLUG to the service’s App Name}}_"
+VOLUME_NAME = "${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_"
+# The whole environment of the two parts that never read the Environment tab: the core, and what each one needs.
+CORE = ["APP_NAME", "APP_URL", "APP_KEY", "DB_HOST", "DB_PORT", "DB_DATABASE", "DB_USERNAME", "DB_PASSWORD", "PGCONNECT_TIMEOUT"]
+INSTALLER_ENVIRONMENT = sorted([*CORE, "PAGE_CACHE_DRIVER", "TEME_EXTENSIONS_PATH", "TEME_EXTENSIONS_ROLE"])
+UPDATER_ENVIRONMENT = sorted([
+    *CORE, "TEME_IMAGE_REPOSITORY", "TEME_GITHUB_TOKEN", "TEME_UPDATER_PLATFORM",
+    "TEME_DOKPLOY_URL", "TEME_DOKPLOY_TOKEN", "TEME_DOKPLOY_COMPOSE_ID", "TEME_DOKPLOY_APP_NAME",
+])
 MAKERS_TALK = re.compile(r"\bI-\d+|\bwe\b|decided|the owner|for now|not prov|not finished|\b20\d\d-\d\d-\d\d\b", re.I)
 EXAMPLE_VALUES = {
     "TEME_IMAGE": "ghcr.io/temecms/teme:0.0.0",
@@ -60,9 +67,10 @@ def problem(sentence: str) -> None:
     problems.append(sentence)
 
 
-def compose(*options: str, environment: dict | None = None) -> dict:
+def compose(*options: str, environment: dict | None = None, env_file: Path | None = None) -> dict:
     """The compose file as Docker Compose reads it, with anchors and merges resolved."""
-    command = ["docker", "compose", "-p", "teme-abc123", "-f", str(BLUEPRINT), "config", "--format", "json", *options]
+    files = ["--env-file", str(env_file)] if env_file is not None else []
+    command = ["docker", "compose", "-p", "teme-abc123", *files, "-f", str(BLUEPRINT), "config", "--format", "json", *options]
     found = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", env={**base_environment(), **(environment or {})})
     if found.returncode != 0:
         raise SystemExit(f"docker compose config failed: {found.stderr.strip()}")
@@ -96,8 +104,15 @@ def fill(text: str, variables: dict, domain: str) -> str:
     return re.sub(r"\$\{([^}]+)\}", one, text)
 
 
-def template_environment(template: dict, app_name: str = "teme-abc123", domain: str = "teme-1a2b3c-203-0-113-9.sslip.io") -> list:
-    variables = {"APP_NAME": app_name}
+def template_environment(template: dict, app_name: str | None = "teme-abc123", domain: str = "teme-1a2b3c-203-0-113-9.sslip.io") -> list:
+    """The Environment tab's lines for a new service.
+
+    ASSUMPTION: Dokploy's deployTemplate passes the service's App Name to the template as the variable APP_NAME
+    (apps/dokploy/server/api/routers/compose.ts, v0.31.2: `variables: { APP_NAME: appName, ...}`; DokployPress's
+    `stack_slug = "${APP_NAME}"` resolves the same way). This function assumes it, so a green check does not prove it:
+    the live run checks the stored Environment tab. Pass app_name=None for Dokploy leaving ${APP_NAME} as it is.
+    """
+    variables = {} if app_name is None else {"APP_NAME": app_name}
     for name, value in template["variables"].items():
         variables[name] = fill(value, variables, domain)
     return [fill(line, variables, domain) for line in template["config"]["env"]]
@@ -198,6 +213,10 @@ def check_compose(compose_text: str) -> None:
 
     if services["installer"].get("user") != "9990:9990":
         problem("The installer must run as its own user, 9990.")
+    if sorted(services["installer"].get("environment", {}).keys()) != INSTALLER_ENVIRONMENT:
+        problem(f"The installer's environment must be the core and its own settings alone: {', '.join(INSTALLER_ENVIRONMENT)}.")
+    if sorted(services["updater"].get("environment", {}).keys()) != UPDATER_ENVIRONMENT:
+        problem(f"The updater's environment must be the core and the platform's settings alone: {', '.join(UPDATER_ENVIRONMENT)}.")
     updater = services["updater"]
     if sorted(updater.get("networks", {}).keys()) != ["default", "dokploy-network"]:
         problem("The updater must join default and dokploy-network.")
@@ -234,10 +253,52 @@ def check_compose(compose_text: str) -> None:
         if volume.get("name") != f"my-site_{key}":
             problem(f"With STACK_SLUG the volume {key} must be my-site_{key}.")
 
+    # Neither part that keeps out of the Environment tab gets the media keys, the database's own password, or mail.
+    for name in ("installer", "updater"):
+        for secret in ("MEDIA_BUCKET_SECRET_ACCESS_KEY", "MEDIA_BUCKET_ACCESS_KEY_ID", "POSTGRES_PASSWORD", "MAIL_PASSWORD"):
+            if secret in resolved["services"][name].get("environment", {}):
+                problem(f"The {name} must not receive {secret}.")
+    if "TEME_GITHUB_TOKEN" in resolved["services"]["installer"].get("environment", {}):
+        problem("The installer must not receive TEME_GITHUB_TOKEN.")
+
+
+def dokploy_env_file(lines: list, folder: Path) -> Path:
+    """A .env as Dokploy writes one for a Compose service: its own two lines first, then the Environment tab, each
+    value quoted, with a $ that doesn't open a ${NAME} escaped."""
+    path = folder / "dokploy.env"
+    written = ['APP_NAME="teme-abc123"', 'COMPOSE_PROJECT_NAME="teme-abc123"']
+    for line in lines:
+        key, value = line.split("=", 1)
+        value = re.sub(r"\$(?!\{[A-Za-z_][A-Za-z0-9_]*\})", r"\\$", value.replace("\\", "\\\\").replace('"', '\\"'))
+        written.append(f'{key}="{value}"')
+    path.write_text("\n".join(written) + "\n", encoding="utf-8", newline="\n")
+    return path
+
+
+def check_dokploy_env(template: dict) -> None:
+    """The site's folders and the updater's App Name, from the .env Dokploy writes: whether Dokploy fills ${APP_NAME}
+    in the template (the assumption template_environment makes) or leaves it as it is, Compose reads APP_NAME from the
+    line Dokploy writes first, so neither gives a folder named after a literal ${APP_NAME}."""
+    import tempfile
+
+    for app_name, case in (("teme-abc123", "Dokploy fills ${APP_NAME}"), (None, "Dokploy leaves ${APP_NAME} as it is")):
+        with tempfile.TemporaryDirectory() as folder:
+            env = dokploy_env_file(template_environment(template, app_name=app_name), Path(folder))
+            try:
+                resolved = compose(env_file=env)
+            except SystemExit as refused:
+                problem(f"{case}: Compose refuses the template's settings: {refused}")
+                continue
+        for key, volume in resolved["volumes"].items():
+            if volume.get("name") != f"teme-abc123_{key}":
+                problem(f"{case}: the volume {key} must be teme-abc123_{key}, not {volume.get('name')}.")
+        if resolved["services"]["updater"]["environment"].get("TEME_DOKPLOY_APP_NAME") != "teme-abc123":
+            problem(f"{case}: the updater's TEME_DOKPLOY_APP_NAME must be the App Name.")
+
 
 def check_hashes(previous: Path | None) -> None:
     data = json.loads(LIST.read_text(encoding="utf-8"))
-    current = hash_of(BLUEPRINT.read_text(encoding="utf-8"))
+    current = hash_of(BLUEPRINT.read_bytes())
     released = data.get("released", [])
     if data.get("format") != 1:
         problem("compose-hashes.json must be format 1.")
@@ -284,6 +345,7 @@ def main(argv: list) -> int:
     check_meta(template)
     check_template(template, compose_text)
     check_compose(compose_text)
+    check_dokploy_env(template)
     check_hashes(previous)
     check_words(compose_text)
     for sentence in problems:

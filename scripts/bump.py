@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Sets the Teme release the template installs: `version` in meta.json, `teme_version` in template.toml, and the two
-image lines of the README's block for the Environment tab.
+image lines of the README's block for the Environment tab; and adds "Installs Teme X." under Unreleased in
+CHANGELOG.md.
 
 A template that installs a newer release already is left as it is, so a patch to an older line never moves it back.
 Nothing else in either file changes.
@@ -58,6 +59,13 @@ def bump(version: str, root: Path = ROOT) -> str:
         readme = readme_file.read_text(encoding="utf-8")
         readme = re.sub(r"^(\s*TEME_(?:UPDATER_)?IMAGE=ghcr\.io/temecms/teme:)\S+$", rf"\g<1>{version}", readme, flags=re.M)
         readme_file.write_text(readme, encoding="utf-8", newline="\n")
+
+    # And the changelog says so, first under Unreleased.
+    changelog_file = root / "CHANGELOG.md"
+    if changelog_file.exists():
+        changelog = changelog_file.read_text(encoding="utf-8")
+        changelog = changelog.replace("## Unreleased\n\n", f"## Unreleased\n\n- Installs Teme {version}.\n\n", 1)
+        changelog_file.write_text(changelog, encoding="utf-8", newline="\n")
 
     return f"The template installs {version} now."
 
