@@ -20,3 +20,19 @@ The checks need Python 3.11 or later and Docker Compose 2.24 or later. The **che
 ## Moving the template to a new Teme release
 
 The **follow-teme** workflow does this each day. By hand: `python3 scripts/bump.py 0.9.0` sets the release in `meta.json`, `template.toml` and the README's block for the Environment tab.
+
+## How a compose file is hashed
+
+Teme compares hashes made from a compose file's bytes, in four steps:
+
+1. Replace every CR LF (`0x0D 0x0A`) with LF (`0x0A`).
+2. Remove space, tab, LF, CR, NUL and vertical tab (`0x20 0x09 0x0A 0x0D 0x00 0x0B`) from the end.
+3. Add one LF.
+4. Take SHA-256, written as 64 lowercase hex digits.
+
+For example, the bytes `services:\r\n  web: {}\r\n\r\n` hash to `78ae680a3841176cc921326a7837fc012f1f21701a4f5a4d6943f9e6c20b8af8`. Teme's own test checks the same pair.
+
+## Following Teme's releases
+
+A scheduled workflow reads Teme's newest release each day. When its image is published, the workflow opens a pull request that moves the template to it, and the pull request merges itself once the checks pass. GitHub pauses scheduled workflows in a repository with no activity for 60 days; run **follow-teme** by hand from the Actions tab to start it again.
+
