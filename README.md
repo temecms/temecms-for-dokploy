@@ -14,7 +14,7 @@ Dokploy can make a service in several ways. This table says which ones run Teme,
 | **Compose**, provider **Raw** | Create Service › Compose, paste the compose file | A short block of settings pasted once on the Environment tab. This is the only route where you paste values. See [Install by pasting the compose file](#install-by-pasting-the-compose-file). |
 | **Compose**, provider **GitHub**, **GitLab**, **Bitbucket**, **Gitea** or **Git** | Create Service › Compose, point it at this repository and the compose path | The same block of settings as Raw. See [Install from Git](#install-from-git). |
 | **Compose**, Compose Type **Stack** (Docker Swarm) | Not supported | Teme's file needs Docker Compose: its `deploy` step runs once and the other parts wait for it to finish, which Swarm can't do, and Swarm ignores the order the parts start in. Choose Compose Type **Docker Compose**. |
-| **Application**: Docker image, GitHub, GitLab, Bitbucket, Gitea or Git with the Dockerfile, or Drop (a ZIP) | Teme as one container | See *Install as one Application* in [Teme's Dokploy page](https://github.com/temecms/teme/blob/main/docs/guides/operators/platforms/dokploy.md). |
+| **Application**: Docker image, GitHub, GitLab, Bitbucket, Gitea or Git with the Dockerfile, or Drop (a ZIP) | Teme as one container | See [Run Teme as one container](https://github.com/temecms/teme/blob/main/docs/guides/operators/platforms/one-container.md), section *Dokploy*. |
 | **Database**, and Dokploy's scheduled jobs | Not used with the Compose file | The file brings its own PostgreSQL, and Teme runs its own schedule. |
 
 ## Install from the template list
@@ -107,19 +107,6 @@ Each part's CPU and memory limit is a setting too, with these defaults:
 | `updater` | `TEME_UPDATER_CPUS=0.25` | `TEME_UPDATER_MEMORY=256m` |
 
 `TEME_GITHUB_TOKEN` is optional: a read-only token that raises GitHub's limit when Teme asks for new releases.
-
-## What this repository holds
-
-| File | What it is |
-|---|---|
-| `meta.json` | The template list Dokploy reads at the Base URL. |
-| `blueprints/teme/docker-compose.yml` | The compose file, for the template, Raw and Git alike. |
-| `blueprints/teme/template.toml` | The settings the template fills, and the domain. |
-| `blueprints/teme/teme.svg` | Teme's icon in the list. |
-| `compose-hashes.json` | Every compose file this repository and Teme have released, by SHA-256. Teme's updater replaces a site's compose file only when its hash is listed. |
-| `scripts/check.py` | Checks the template before it is published. |
-| `scripts/bump.py` | Sets the Teme release the template installs. |
-| `scripts/hashes.py` | Keeps `compose-hashes.json`. |
 
 The template always installs Teme's newest release; you don't need to do anything to keep it current. To move a site you've installed to a newer release, use **Update** in its admin ([Switch on Update from the admin](#switch-on-update-from-the-admin)).
 
