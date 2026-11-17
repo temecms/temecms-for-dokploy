@@ -1,5 +1,18 @@
 # Contributing
 
+## What this repository holds
+
+| File | What it is |
+|---|---|
+| `meta.json` | The template list Dokploy reads at the Base URL. |
+| `blueprints/teme/docker-compose.yml` | The compose file, for the template, Raw and Git alike. |
+| `blueprints/teme/template.toml` | The settings the template fills, and the domain. |
+| `blueprints/teme/teme.svg` | Teme's icon in the list. |
+| `compose-hashes.json` | Every compose file this repository and Teme have released, by SHA-256. Teme's updater replaces a site's compose file only when its hash is listed. |
+| `scripts/check.py` | Checks the template before it is published. |
+| `scripts/bump.py` | Sets the Teme release the template installs. |
+| `scripts/hashes.py` | Keeps `compose-hashes.json`. |
+
 ## Changing the compose file
 
 A site made from the template keeps the compose file it was made with. Teme's updater brings it the new one at the site's next update, but only when the site's file is listed in `compose-hashes.json`. So every change to `blueprints/teme/docker-compose.yml` comes with the list updated:
