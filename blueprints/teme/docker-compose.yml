@@ -1,0 +1,323 @@
+# TemeCMS on Dokploy: one Compose service with its own PostgreSQL.
+# Guide: https://github.com/temecms/temecms-for-dokploy
+#
+# Dokploy's template list fills every setting below. Pasted as Raw, or read
+# from Git, it needs these on the service's Environment tab:
+#   TEME_IMAGE and TEME_UPDATER_IMAGE: ghcr.io/temecms/teme with a release's tag
+#   TEME_IMAGE_REPOSITORY: ghcr.io/temecms/teme
+#   APP_URL, APP_KEY, DB_PASSWORD, POSTGRES_PASSWORD
+# Anything else typed there reaches web, the workers, the scheduler and the
+# deploy step: mail, TRUSTED_PROXIES, the update channel.
+# STACK_SLUG names the site's folders (volumes); it defaults to the service's
+# App Name. Change it before the first deploy only, never afterwards.
+# Each part's CPU and memory limit can be changed the same way, for example
+# TEME_WEB_CPUS=2 and TEME_WEB_MEMORY=2g.
+
+# What every Teme part needs to run at all: its address, its app key (which
+# reads the settings Teme keeps encrypted) and its database login. Dokploy
+# writes the service's App Name as APP_NAME; Teme keeps its own.
+x-teme-core: &teme-core
+    APP_NAME: Teme
+    APP_URL: ${APP_URL:?set APP_URL to the site’s https:// address}
+    APP_KEY: ${APP_KEY:?set APP_KEY; the guide shows how to make one}
+    DB_HOST: teme-postgres
+    DB_PORT: '5432'
+    DB_DATABASE: teme_site
+    DB_USERNAME: teme_app
+    DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD to letters and digits}
+    PGCONNECT_TIMEOUT: '3'
+
+# The parts that run the site: the core, and everything the site reads.
+x-teme-environment: &teme-environment
+    <<: *teme-core
+    TEME_VERIFY_DATABASE: teme_verify
+    PAGE_CACHE_DRIVER: static
+    TEME_IMAGE_REPOSITORY: ${TEME_IMAGE_REPOSITORY:-}
+    TEME_EXTENSIONS_PATH: /var/teme/extensions
+    # Kept out of every Teme part, even when the Environment tab holds them:
+    # the database's own password, and Dokploy's key, which only the updater uses.
+    POSTGRES_PASSWORD: ''
+    TEME_DOKPLOY_TOKEN: ''
+    # Media in object storage (Teme's docs/guides/operators/object-storage.md); every
+    # part reads the same disks, or a worker writes where web doesn't read.
+    MEDIA_STORAGE: ${MEDIA_STORAGE:-server}
+    MEDIA_DISK: ${MEDIA_DISK:-}
+    MEDIA_ORIGINALS_DISK: ${MEDIA_ORIGINALS_DISK:-}
+    MEDIA_URL: ${MEDIA_URL:-}
+    MEDIA_BUCKET: ${MEDIA_BUCKET:-}
+    MEDIA_ORIGINALS_BUCKET: ${MEDIA_ORIGINALS_BUCKET:-}
+    MEDIA_BUCKET_ROOT: ${MEDIA_BUCKET_ROOT:-}
+    MEDIA_ORIGINALS_BUCKET_ROOT: ${MEDIA_ORIGINALS_BUCKET_ROOT:-}
+    MEDIA_BUCKET_ENDPOINT: ${MEDIA_BUCKET_ENDPOINT:-}
+    MEDIA_BUCKET_REGION: ${MEDIA_BUCKET_REGION:-}
+    MEDIA_BUCKET_PATH_STYLE: ${MEDIA_BUCKET_PATH_STYLE:-}
+    MEDIA_BUCKET_ACCESS_KEY_ID: ${MEDIA_BUCKET_ACCESS_KEY_ID:-}
+    MEDIA_BUCKET_SECRET_ACCESS_KEY: ${MEDIA_BUCKET_SECRET_ACCESS_KEY:-}
+    MEDIA_BUCKET_URL: ${MEDIA_BUCKET_URL:-}
+    MEDIA_BUCKET_ACL: ${MEDIA_BUCKET_ACL:-}
+
+x-teme: &teme
+    image: ${TEME_IMAGE:?set TEME_IMAGE to ghcr.io/temecms/teme with a release’s tag}
+    environment: *teme-environment
+    volumes:
+        - media:/var/www/html/storage/app
+        - page-cache:/var/www/html/storage/page-cache
+        - extensions:/var/teme/extensions:ro
+    networks:
+        - default
+    restart: unless-stopped
+
+# The settings typed on Dokploy's Environment tab, for the parts that run the site.
+x-site-settings: &site-settings
+    - path: .env
+      required: false
+
+services:
+    teme-postgres:
+        image: postgres:18.6-trixie
+        environment:
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD to letters and digits}
+        volumes:
+            - pgdata:/var/lib/postgresql
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'pg_isready',
+                    '--host',
+                    '127.0.0.1',
+                    '--username',
+                    'postgres',
+                    '--dbname',
+                    'postgres',
+                ]
+            interval: 5s
+            timeout: 5s
+            retries: 30
+            start_period: 30s
+        stop_grace_period: 1m
+        networks:
+            - default
+        restart: unless-stopped
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_POSTGRES_CPUS:-1}'
+                    memory: '${TEME_POSTGRES_MEMORY:-1g}'
+
+    # Makes Teme's own limited login and its two databases, and sets the
+    # login's password to DB_PASSWORD, on every deploy; safe to run again.
+    teme-db-setup:
+        image: postgres:18.6-trixie
+        environment:
+            PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD to letters and digits}
+            TEME_DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD to letters and digits}
+        entrypoint: ['/bin/sh', '-c']
+        command:
+            - |
+                psql -v ON_ERROR_STOP=1 --no-psqlrc -h teme-postgres -U postgres -d postgres <<'SQL'
+                \getenv teme_password TEME_DB_PASSWORD
+                SELECT 'CREATE ROLE teme_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teme_app') \gexec
+                ALTER ROLE teme_app PASSWORD :'teme_password';
+                SELECT 'CREATE DATABASE teme_site OWNER teme_app TEMPLATE template0 ENCODING ''UTF8''' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teme_site') \gexec
+                SELECT 'CREATE DATABASE teme_verify OWNER teme_app TEMPLATE template0 ENCODING ''UTF8''' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teme_verify') \gexec
+                REVOKE ALL ON DATABASE teme_site FROM PUBLIC;
+                REVOKE ALL ON DATABASE teme_verify FROM PUBLIC;
+                SQL
+        restart: 'no'
+        networks:
+            - default
+        depends_on:
+            teme-postgres:
+                condition: service_healthy
+
+    # Migrates under a lock, then exits; every other part waits for it. Its
+    # log ends with the setup page's address and the setup code.
+    deploy:
+        <<: *teme
+        env_file: *site-settings
+        command: ['php', 'artisan', 'teme:deploy']
+        init: true
+        restart: 'no'
+        healthcheck:
+            disable: true
+        depends_on:
+            teme-db-setup:
+                condition: service_completed_successfully
+
+    web:
+        <<: *teme
+        env_file: *site-settings
+        networks:
+            - default
+            - dokploy-network
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+            installer:
+                condition: service_healthy
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_WEB_CPUS:-1}'
+                    memory: '${TEME_WEB_MEMORY:-1g}'
+
+    worker:
+        <<: *teme
+        env_file: *site-settings
+        command:
+            ['php', 'artisan', 'queue:work', '--tries=3', '--max-time=3600']
+        init: true
+        stop_grace_period: 6m
+        healthcheck:
+            test: ['CMD', 'healthcheck-queue']
+            start_period: 10s
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+            installer:
+                condition: service_healthy
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_WORKER_CPUS:-0.5}'
+                    memory: '${TEME_WORKER_MEMORY:-512m}'
+
+    worker-long:
+        <<: *teme
+        env_file: *site-settings
+        command:
+            [
+                'php',
+                'artisan',
+                'queue:work',
+                'database-long',
+                '--queue=long',
+                '--tries=3',
+                '--max-time=3600',
+            ]
+        init: true
+        stop_grace_period: 6m
+        healthcheck:
+            test: ['CMD', 'healthcheck-queue']
+            start_period: 10s
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+            installer:
+                condition: service_healthy
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_WORKER_LONG_CPUS:-0.5}'
+                    memory: '${TEME_WORKER_LONG_MEMORY:-512m}'
+
+    scheduler:
+        <<: *teme
+        env_file: *site-settings
+        command: ['php', 'artisan', 'schedule:work']
+        init: true
+        stop_grace_period: 30m
+        healthcheck:
+            test: ['CMD', 'healthcheck-schedule']
+            start_period: 10s
+        environment:
+            <<: *teme-environment
+            TEME_GITHUB_TOKEN: ${TEME_GITHUB_TOKEN:-}
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+            installer:
+                condition: service_healthy
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_SCHEDULER_CPUS:-0.25}'
+                    memory: '${TEME_SCHEDULER_MEMORY:-256m}'
+
+    # Installs, updates and removes the plugins and themes asked for from the
+    # admin (Teme's docs/guides/operators/extensions.md): the only part that writes
+    # the extensions volume. It never reads the Environment tab, and has only
+    # the core: the database, where requests are kept, and the app key, which
+    # opens a saved source's key. Composer, which it runs, gets neither: Teme
+    # starts it with none of the site's secrets. The others start once it has
+    # checked the installed ones against this image.
+    installer:
+        <<: *teme
+        user: '9990:9990'
+        # The image's start step writes caches into storage/, which this user can't write; the installer needs none.
+        entrypoint: ['php', 'artisan', 'teme:installer']
+        init: true
+        stop_grace_period: 2m
+        environment:
+            <<: *teme-core
+            PAGE_CACHE_DRIVER: static
+            TEME_EXTENSIONS_PATH: /var/teme/extensions
+            TEME_EXTENSIONS_ROLE: installer
+        volumes:
+            - extensions:/var/teme/extensions
+        healthcheck:
+            test: ['CMD', 'test', '-f', '/tmp/teme-installer-ready']
+            interval: 5s
+            retries: 3
+            start_period: 15m
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_INSTALLER_CPUS:-0.5}'
+                    memory: '${TEME_INSTALLER_MEMORY:-1g}'
+
+    # Carries out an update asked for from the admin: changes TEME_IMAGE, and
+    # this file when a release brings a new one, through Dokploy's API, and
+    # deploys this service. It finds the service by its App Name and uses the
+    # Dokploy API key pasted in Settings › Updates. Its own image is
+    # TEME_UPDATER_IMAGE, so the update it runs never replaces it midway.
+    updater:
+        image: ${TEME_UPDATER_IMAGE:?set TEME_UPDATER_IMAGE to the same image as TEME_IMAGE}
+        command: ['php', 'artisan', 'teme:updater']
+        init: true
+        stop_grace_period: 1m
+        healthcheck:
+            disable: true
+        # The core, which opens the Dokploy key Settings › Updates keeps
+        # encrypted, and the platform's settings; none of the media keys.
+        environment:
+            <<: *teme-core
+            TEME_IMAGE_REPOSITORY: ${TEME_IMAGE_REPOSITORY:-}
+            TEME_GITHUB_TOKEN: ${TEME_GITHUB_TOKEN:-}
+            TEME_UPDATER_PLATFORM: dokploy
+            TEME_DOKPLOY_URL: ${TEME_DOKPLOY_URL:-http://dokploy:3000}
+            TEME_DOKPLOY_TOKEN: ${TEME_DOKPLOY_TOKEN:-}
+            TEME_DOKPLOY_COMPOSE_ID: ${TEME_DOKPLOY_COMPOSE_ID:-}
+            TEME_DOKPLOY_APP_NAME: ${TEME_DOKPLOY_APP_NAME:-${COMPOSE_PROJECT_NAME:-}}
+        networks:
+            - default
+            - dokploy-network
+        restart: unless-stopped
+        depends_on:
+            deploy:
+                condition: service_completed_successfully
+        deploy:
+            resources:
+                limits:
+                    cpus: '${TEME_UPDATER_CPUS:-0.25}'
+                    memory: '${TEME_UPDATER_MEMORY:-256m}'
+
+networks:
+    dokploy-network:
+        external: true
+
+# Named for the site: STACK_SLUG, or the service's App Name. With no
+# STACK_SLUG these are the names Docker gave them before they were named here.
+volumes:
+    pgdata:
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_pgdata
+    media:
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_media
+    page-cache:
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_page-cache
+    extensions:
+        name: ${STACK_SLUG:-${COMPOSE_PROJECT_NAME:-teme}}_extensions

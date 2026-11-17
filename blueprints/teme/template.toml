@@ -1,0 +1,34 @@
+# TemeCMS for Dokploy's template list. Every setting is filled here: the site
+# needs nothing typed before its first deploy.
+# Guide: https://github.com/temecms/temecms-for-dokploy
+
+[variables]
+# The release this template installs. The release step changes it.
+teme_version = "0.8.0-alpha.1"
+image_repository = "ghcr.io/temecms/teme"
+# An address Dokploy makes for the server; change it on the Domains tab and
+# in APP_URL to use your own.
+main_domain = "${domain}"
+# "base64:" and 32 random bytes, as Laravel reads an app key.
+app_key = "base64:${base64:32}"
+# Letters and digits only, from a secure random source.
+db_password = "${hash:64}"
+postgres_password = "${hash:64}"
+
+[config]
+env = [
+    "TEME_IMAGE=${image_repository}:${teme_version}",
+    "TEME_UPDATER_IMAGE=${image_repository}:${teme_version}",
+    "TEME_IMAGE_REPOSITORY=${image_repository}",
+    "APP_URL=https://${main_domain}",
+    "APP_KEY=${app_key}",
+    "DB_PASSWORD=${db_password}",
+    "POSTGRES_PASSWORD=${postgres_password}",
+    "STACK_SLUG=${APP_NAME}",
+    "TEME_DOKPLOY_APP_NAME=${APP_NAME}",
+]
+
+[[config.domains]]
+serviceName = "web"
+port = 8080
+host = "${main_domain}"
