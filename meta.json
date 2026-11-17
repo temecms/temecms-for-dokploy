@@ -2,7 +2,7 @@
     {
         "id": "teme",
         "name": "TemeCMS",
-        "version": "0.8.0-alpha.1",
+        "version": "1.0.1",
         "description": "A content management system built on Laravel and PostgreSQL: posts, pages, media, themes and plugins, with its own database, queue workers, scheduler and an Update button in the admin.",
         "logo": "teme.svg",
         "links": {

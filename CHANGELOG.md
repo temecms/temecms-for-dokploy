@@ -4,6 +4,8 @@ Each entry says whether the compose file changed. A site made from the template 
 
 ## Unreleased
 
+- Installs Teme 1.0.1.
+
 ### Added
 
 - Install Teme from Dokploy's template list: paste one address, choose TemeCMS, and deploy, with every setting filled for you.
