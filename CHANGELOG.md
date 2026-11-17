@@ -21,7 +21,7 @@ Each entry says whether the compose file changed. A site made from the template 
 - The updater finds its Dokploy service by the service's name, and its Dokploy API key is entered in Teme's Settings › Updates.
 - The README is rewritten as step-by-step instructions for every way to install.
 
-Compose file: changed. Sites made from Teme's `docker/compose.dokploy.yml` get this file at their next update from the admin, or by the steps in *Moving an existing install to the template*.
+Compose file: changed. Sites made from Teme's `docker/compose.dokploy.yml` get this file at their next update from the admin.
 
 ## 2026-11-15
 
