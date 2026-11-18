@@ -102,9 +102,11 @@ Each part's CPU and memory limit is a setting too, with these defaults:
 | `web` | `TEME_WEB_CPUS=1` | `TEME_WEB_MEMORY=1g` |
 | `worker` | `TEME_WORKER_CPUS=0.5` | `TEME_WORKER_MEMORY=512m` |
 | `worker-long` | `TEME_WORKER_LONG_CPUS=0.5` | `TEME_WORKER_LONG_MEMORY=512m` |
-| `scheduler` | `TEME_SCHEDULER_CPUS=0.25` | `TEME_SCHEDULER_MEMORY=256m` |
+| `scheduler` | `TEME_SCHEDULER_CPUS=0.25` | `TEME_SCHEDULER_MEMORY=512m` |
 | `installer` | `TEME_INSTALLER_CPUS=0.5` | `TEME_INSTALLER_MEMORY=1g` |
 | `updater` | `TEME_UPDATER_CPUS=0.25` | `TEME_UPDATER_MEMORY=256m` |
+
+A part never swaps: at its memory limit, a process in it is stopped instead, so it can't slow the other sites on the server. `web` starts at most `PHP_FPM_PM_MAX_CHILDREN` PHP workers (10, which fit in 1g); when you raise `TEME_WEB_MEMORY`, raise it too, about 10 for each gigabyte.
 
 `TEME_GITHUB_TOKEN` is optional: a read-only token that raises GitHub's limit when Teme asks for new releases.
 

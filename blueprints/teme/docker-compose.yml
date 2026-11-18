@@ -34,6 +34,9 @@ x-teme-environment: &teme-environment
     PAGE_CACHE_DRIVER: static
     TEME_IMAGE_REPOSITORY: ${TEME_IMAGE_REPOSITORY:-}
     TEME_EXTENSIONS_PATH: /var/teme/extensions
+    # PHP-FPM's workers in web, sized to web's memory: about 80 MB each, so
+    # 10 fit in 1g. Raise it with TEME_WEB_MEMORY (for example 20 for 2g).
+    PHP_FPM_PM_MAX_CHILDREN: ${PHP_FPM_PM_MAX_CHILDREN:-10}
     # Kept out of every Teme part, even when the Environment tab holds them:
     # the database's own password, and Dokploy's key, which only the updater uses.
     POSTGRES_PASSWORD: ''
@@ -104,6 +107,9 @@ services:
                 limits:
                     cpus: '${TEME_POSTGRES_CPUS:-1}'
                     memory: '${TEME_POSTGRES_MEMORY:-1g}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_POSTGRES_MEMORY:-1g}'
 
     # Makes Teme's own limited login and its two databases, and sets the
     # login's password to DB_PASSWORD, on every deploy; safe to run again.
@@ -161,6 +167,9 @@ services:
                 limits:
                     cpus: '${TEME_WEB_CPUS:-1}'
                     memory: '${TEME_WEB_MEMORY:-1g}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_WEB_MEMORY:-1g}'
 
     worker:
         <<: *teme
@@ -182,6 +191,9 @@ services:
                 limits:
                     cpus: '${TEME_WORKER_CPUS:-0.5}'
                     memory: '${TEME_WORKER_MEMORY:-512m}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_WORKER_MEMORY:-512m}'
 
     worker-long:
         <<: *teme
@@ -211,6 +223,9 @@ services:
                 limits:
                     cpus: '${TEME_WORKER_LONG_CPUS:-0.5}'
                     memory: '${TEME_WORKER_LONG_MEMORY:-512m}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_WORKER_LONG_MEMORY:-512m}'
 
     scheduler:
         <<: *teme
@@ -233,7 +248,10 @@ services:
             resources:
                 limits:
                     cpus: '${TEME_SCHEDULER_CPUS:-0.25}'
-                    memory: '${TEME_SCHEDULER_MEMORY:-256m}'
+                    memory: '${TEME_SCHEDULER_MEMORY:-512m}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_SCHEDULER_MEMORY:-512m}'
 
     # Installs, updates and removes the plugins and themes asked for from the
     # admin (Teme's docs/guides/operators/extensions.md): the only part that writes
@@ -269,6 +287,9 @@ services:
                 limits:
                     cpus: '${TEME_INSTALLER_CPUS:-0.5}'
                     memory: '${TEME_INSTALLER_MEMORY:-1g}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_INSTALLER_MEMORY:-1g}'
 
     # Carries out an update asked for from the admin: changes TEME_IMAGE, and
     # this file when a release brings a new one, through Dokploy's API, and
@@ -305,6 +326,9 @@ services:
                 limits:
                     cpus: '${TEME_UPDATER_CPUS:-0.25}'
                     memory: '${TEME_UPDATER_MEMORY:-256m}'
+        # No swap: at its memory limit, a process in this part is stopped instead of
+        # swapping and slowing every site on the server.
+        memswap_limit: '${TEME_UPDATER_MEMORY:-256m}'
 
 networks:
     dokploy-network:

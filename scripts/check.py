@@ -30,7 +30,7 @@ LIMITS = {
     "web": ("TEME_WEB", "1", "1g"),
     "worker": ("TEME_WORKER", "0.5", "512m"),
     "worker-long": ("TEME_WORKER_LONG", "0.5", "512m"),
-    "scheduler": ("TEME_SCHEDULER", "0.25", "256m"),
+    "scheduler": ("TEME_SCHEDULER", "0.25", "512m"),
     "installer": ("TEME_INSTALLER", "0.5", "1g"),
     "updater": ("TEME_UPDATER", "0.25", "256m"),
 }

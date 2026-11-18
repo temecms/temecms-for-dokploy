@@ -6,6 +6,12 @@ Each entry says whether the compose file changed. A site made from the template 
 
 - Installs Teme 1.1.0.
 
+### Changed (the compose file changed)
+
+- No part swaps: each has a swap limit equal to its memory limit, so a part at its limit can't slow the other sites on the server.
+- `web` starts at most 10 PHP workers by default (`PHP_FPM_PM_MAX_CHILDREN`), which fit in its 1g.
+- The scheduler's memory is 512m by default (was 256m), so a backup run fits.
+
 - Installs Teme 1.0.1.
 
 ### Added
