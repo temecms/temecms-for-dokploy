@@ -4,7 +4,7 @@
 
 [variables]
 # The release this template installs. The release step changes it.
-teme_version = "1.0.1"
+teme_version = "1.1.0"
 image_repository = "ghcr.io/temecms/teme"
 # An address Dokploy makes for the server; change it on the Domains tab and
 # in APP_URL to use your own.
