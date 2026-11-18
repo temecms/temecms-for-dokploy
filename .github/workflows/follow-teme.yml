@@ -110,4 +110,6 @@ jobs:
           git push origin "$branch"
           gh pr create --base main --head "$branch" --title "Install Teme ${VERSION}" \
             --body "Moves the template to Teme ${VERSION}: its image is published, and its compose file is listed. Made by the follow-teme workflow."
-          gh pr merge "$branch" --auto --squash
+          # GitHub refuses auto-merge on a pull request whose checks have already
+          # passed ("clean status"); merge it straight away then.
+          gh pr merge "$branch" --auto --squash || gh pr merge "$branch" --squash
