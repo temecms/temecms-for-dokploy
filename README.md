@@ -56,7 +56,7 @@ The site's address is the one Dokploy made, ending in `sslip.io`, on the **Domai
    - `DB_PASSWORD` and `POSTGRES_PASSWORD`: two different passwords of letters and digits only, since Compose rewrites a `$`. On Linux or macOS, run `openssl rand -hex 32` once for each. On Windows PowerShell: `$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })`.
 
    Save.
-3. **Set the domain.** On the **Domains** tab, add your site's address with the service `web`, port `8080`, and HTTPS on.
+3. **Set the domain.** On the **Domains** tab, add your site's address with the service `web`, port `8080`, and HTTPS on with Let's Encrypt. Leave Path, Internal Path, Strip Path and Custom Entrypoint as they are.
 4. **Deploy**, then read the setup code and make the first account as steps 5 to 7 of [the template](#install-from-the-template-list) say.
 
 ## Install from Git
@@ -68,7 +68,7 @@ Each **Deploy** reads the compose file from Git again, so a new compose file arr
 
 ## Use your own domain
 
-1. On the **Domains** tab, edit the domain: set the host to your domain, keep the service `web` and port `8080`, and turn HTTPS on with Let's Encrypt. Point your domain's DNS at the server first.
+1. On the **Domains** tab, edit the domain: set the host to your domain, keep the service `web` and port `8080`, and turn HTTPS on with Let's Encrypt; leave Path, Internal Path, Strip Path and Custom Entrypoint as they are. Point your domain's DNS at the server first.
 2. On the **Environment** tab, set `APP_URL` to the same address, with `https://`, and save.
 3. **Deploy.**
 
