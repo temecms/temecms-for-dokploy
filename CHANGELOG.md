@@ -4,6 +4,8 @@ Each entry says whether the compose file changed. A site made from the template 
 
 ## Unreleased
 
+- Installs Teme 1.3.2.
+
 - Installs Teme 1.1.1.
 
 - Installs Teme 1.1.0.
