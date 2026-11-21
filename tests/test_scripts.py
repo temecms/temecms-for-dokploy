@@ -33,7 +33,10 @@ def copy_of_repository() -> Path:
 class BumpTest(unittest.TestCase):
     def setUp(self) -> None:
         self.root = copy_of_repository()
-        self.was = json.loads((ROOT / "meta.json").read_text(encoding="utf-8"))[0]["version"]
+        self.template = json.loads((ROOT / "meta.json").read_text(encoding="utf-8"))[0]["version"]
+        self.was = check.tomllib.loads((ROOT / "blueprints" / "teme" / "template.toml").read_text(encoding="utf-8"))["variables"]["teme_version"]
+        major, minor, patch = (int(part) for part in self.template.split("."))
+        self.next = f"{major}.{minor}.{patch + 1}"
 
     def read(self) -> tuple:
         meta = (self.root / "meta.json").read_text(encoding="utf-8")
@@ -41,14 +44,17 @@ class BumpTest(unittest.TestCase):
         readme = (self.root / "README.md").read_text(encoding="utf-8")
         return meta, toml, readme
 
-    def test_sets_the_version_in_each_file_and_nothing_else(self) -> None:
+    def test_sets_the_release_and_makes_a_new_patch_version_of_the_template(self) -> None:
         meta, toml, readme = self.read()
 
         said = bump.bump("99.0.0", self.root)
 
         new_meta, new_toml, new_readme = self.read()
         self.assertEqual("The template installs 99.0.0 now.", said)
-        self.assertEqual(meta.replace(f'"version": "{self.was}"', '"version": "99.0.0"'), new_meta)
+        self.assertEqual(
+            meta.replace(f'"version": "{self.template}"', f'"version": "{self.next}"').replace(f" Installs Teme {self.was}.", " Installs Teme 99.0.0."),
+            new_meta,
+        )
         self.assertEqual(toml.replace(f'teme_version = "{self.was}"', 'teme_version = "99.0.0"'), new_toml)
         self.assertEqual(readme.replace(f"ghcr.io/temecms/teme:{self.was}", "ghcr.io/temecms/teme:99.0.0"), new_readme)
 
@@ -68,23 +74,13 @@ class BumpTest(unittest.TestCase):
             check.BLUEPRINT, check.TEMPLATE, check.README, check.LIST, check.ROOT = saved
             check.problems.clear()
 
-    def test_says_so_in_the_changelog_under_todays_date(self) -> None:
-        (self.root / "CHANGELOG.md").write_text("# Changelog\n\nIntro.\n\n## 2026-11-15\n\n- Old.\n", encoding="utf-8")
+    def test_says_so_in_the_changelog_under_the_new_version(self) -> None:
+        (self.root / "CHANGELOG.md").write_text(f"# Changelog\n\nIntro.\n\n## {self.template} — 2026-11-15\n\n- Old.\n", encoding="utf-8")
 
         bump.bump("99.0.0", self.root, today="2026-11-21")
 
         self.assertEqual(
-            "# Changelog\n\nIntro.\n\n## 2026-11-21\n\n- Installs Teme 99.0.0.\n\n## 2026-11-15\n\n- Old.\n",
-            (self.root / "CHANGELOG.md").read_text(encoding="utf-8"),
-        )
-
-    def test_a_second_release_the_same_day_joins_that_days_heading(self) -> None:
-        (self.root / "CHANGELOG.md").write_text("# Changelog\n\nIntro.\n\n## 2026-11-21\n\n### Changed\n\n- Something.\n", encoding="utf-8")
-
-        bump.bump("99.0.0", self.root, today="2026-11-21")
-
-        self.assertEqual(
-            "# Changelog\n\nIntro.\n\n## 2026-11-21\n\n- Installs Teme 99.0.0.\n\n### Changed\n\n- Something.\n",
+            f"# Changelog\n\nIntro.\n\n## {self.next} — 2026-11-21\n\n- Installs Teme 99.0.0.\n\n## {self.template} — 2026-11-15\n\n- Old.\n",
             (self.root / "CHANGELOG.md").read_text(encoding="utf-8"),
         )
 
@@ -258,10 +254,15 @@ class CheckTest(unittest.TestCase):
 
         self.assertIn("template.toml doesn't fill DB_PASSWORD, which the compose file requires.", self.run_check())
 
-    def test_catches_versions_that_disagree(self) -> None:
+    def test_catches_a_description_that_names_another_release(self) -> None:
         self.edit(check.TEMPLATE, 'teme_version = "', 'teme_version = "9')
 
-        self.assertIn("meta.json's version and template.toml's teme_version differ.", self.run_check())
+        self.assertIn("meta.json's description must end with the Teme release template.toml installs.", self.run_check())
+
+    def test_catches_a_changelog_that_doesnt_open_with_the_templates_version(self) -> None:
+        self.edit(check.ROOT / "CHANGELOG.md", "## ", "## 9", )
+
+        self.assertIn("CHANGELOG.md's newest heading must be meta.json's version.", self.run_check())
 
 
 if __name__ == "__main__":

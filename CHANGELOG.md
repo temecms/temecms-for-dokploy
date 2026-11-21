@@ -1,21 +1,22 @@
 # Changelog
 
-New sites install from this repository's main branch, so each heading is the day a change reached it. Each entry says whether the compose file changed. A site made from the template keeps the compose file it was made with until Teme's updater replaces it, which it does only for a file listed in `compose-hashes.json`.
+The template has its own version, shown on Dokploy's template list; every change other than to its documentation is a new version. New sites install from this repository's main branch, so a version is live the day it lands. Each entry says whether the compose file changed. A site made from the template keeps the compose file it was made with until Teme's updater replaces it, which it does only for a file listed in `compose-hashes.json`.
 
-## 2026-11-21
+## 1.0.3 — 2026-11-21
 
 ### Changed
 
 - A new site's Environment tab is grouped, with a comment above each group saying what it is for and what must never change after the first deploy. The mail settings are there too, commented out, ready to fill in.
 - The comment above `TEME_DOKPLOY_APP_NAME` says not to edit it.
+- The template has its own version, shown on the template list (this is 1.0.3); the Teme release it installs is named in its description.
 
 Compose file: unchanged.
 
-## 2026-11-20
+## 1.0.2 — 2026-11-20
 
 - Installs Teme 1.3.2.
 
-## 2026-11-18
+## 1.0.1 — 2026-11-18
 
 - Installs Teme 1.1.1.
 - Installs Teme 1.1.0.
@@ -26,7 +27,7 @@ Compose file: unchanged.
 - `web` starts at most 10 PHP workers by default (`PHP_FPM_PM_MAX_CHILDREN`), which fit in its 1g.
 - The scheduler's memory is 512m by default (was 256m), so a backup run fits.
 
-## 2026-11-17
+## 1.0.0 — 2026-11-17
 
 - Installs Teme 1.0.1.
 
@@ -49,7 +50,9 @@ Compose file: unchanged.
 
 Compose file: changed. Sites made from Teme's `docker/compose.dokploy.yml` get this file at their next update from the admin.
 
-## 2026-11-15
+## Before 1.0.0
+
+### 2026-11-15
 
 ### Changed
 
@@ -58,7 +61,7 @@ Compose file: changed. Sites made from Teme's `docker/compose.dokploy.yml` get t
 
 Compose file: unchanged since Teme v0.7.0-alpha.1.
 
-## 2026-11-13
+### 2026-11-13
 
 ### Added
 

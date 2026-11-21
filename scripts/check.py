@@ -136,10 +136,14 @@ def check_meta(template: dict) -> None:
         problem("meta.json's entry must be id teme, name TemeCMS.")
     if not (ROOT / "blueprints" / "teme" / str(entry.get("logo"))).is_file():
         problem("meta.json's logo isn't in blueprints/teme/.")
-    if not VERSION.match(str(entry.get("version"))):
-        problem("meta.json's version isn't a release's version.")
-    if entry.get("version") != template["variables"].get("teme_version"):
-        problem("meta.json's version and template.toml's teme_version differ.")
+    if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", str(entry.get("version"))):
+        problem("meta.json's version isn't the template's own version, such as 1.0.3.")
+    if not str(entry.get("description", "")).endswith(f" Installs Teme {template['variables'].get('teme_version')}."):
+        problem("meta.json's description must end with the Teme release template.toml installs.")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    newest = re.search(r"^## (\S+)", changelog, re.M)
+    if newest is None or newest.group(1) != entry.get("version"):
+        problem("CHANGELOG.md's newest heading must be meta.json's version.")
 
 
 def check_template(template: dict, compose_text: str) -> None:
