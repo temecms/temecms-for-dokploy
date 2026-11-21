@@ -26,7 +26,7 @@ A site made from the template keeps the compose file it was made with. Teme's up
    python3 scripts/check.py
    ```
 
-4. Add a line to `CHANGELOG.md` under **Unreleased**, and say that the compose file changed.
+4. Add a line to `CHANGELOG.md` under the date the change lands on main (make the heading if it is a new day), and say whether the compose file changed.
 
 The checks need Python 3.11 or later and Docker Compose 2.24 or later. The **check** workflow runs them on every pull request, with `main`'s list, so a change that drops a listed file fails.
 
