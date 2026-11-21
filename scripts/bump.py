@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sets the Teme release the template installs: `version` in meta.json, `teme_version` in template.toml, and the two
-image lines of the README's block for the Environment tab; and adds "Installs Teme X." under Unreleased in
-CHANGELOG.md.
+image lines of the README's block for the Environment tab; and adds "Installs Teme X." to CHANGELOG.md under
+today's date, the day the change reaches main and so every new install.
 
 A template that installs a newer release already is left as it is, so a patch to an older line never moves it back.
 Nothing else in either file changes.
@@ -12,6 +12,7 @@ Nothing else in either file changes.
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,7 +33,8 @@ def key(version: str) -> tuple:
     return (major, minor, patch, STAGES[found.group(5)], int(found.group(6)))
 
 
-def bump(version: str, root: Path = ROOT) -> str:
+def bump(version: str, root: Path = ROOT, today: str | None = None) -> str:
+    today = today or date.today().isoformat()
     """Rewrites both files for the version, and says what happened."""
     key(version)
     meta_file = root / "meta.json"
@@ -60,11 +62,20 @@ def bump(version: str, root: Path = ROOT) -> str:
         readme = re.sub(r"^(\s*TEME_(?:UPDATER_)?IMAGE=ghcr\.io/temecms/teme:)\S+$", rf"\g<1>{version}", readme, flags=re.M)
         readme_file.write_text(readme, encoding="utf-8", newline="\n")
 
-    # And the changelog says so, first under Unreleased.
+    # And the changelog says so, under today's date: main is what every new install reads, so a change is live the
+    # day it lands. Today's heading is made if it isn't the newest one already.
     changelog_file = root / "CHANGELOG.md"
     if changelog_file.exists():
         changelog = changelog_file.read_text(encoding="utf-8")
-        changelog = changelog.replace("## Unreleased\n\n", f"## Unreleased\n\n- Installs Teme {version}.\n\n", 1)
+        line = f"- Installs Teme {version}.\n"
+        heading = f"## {today}\n\n"
+        first = changelog.find("\n## ")
+        if first != -1 and changelog.startswith(heading, first + 1):
+            changelog = changelog[: first + 1 + len(heading)] + line + "\n" + changelog[first + 1 + len(heading):]
+        elif first != -1:
+            changelog = changelog[: first + 1] + heading + line + "\n" + changelog[first + 1:]
+        else:
+            changelog = changelog.rstrip("\n") + "\n\n" + heading + line
         changelog_file.write_text(changelog, encoding="utf-8", newline="\n")
 
     return f"The template installs {version} now."

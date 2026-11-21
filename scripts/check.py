@@ -118,6 +118,12 @@ def template_environment(template: dict, app_name: str | None = "teme-abc123", d
     return [fill(line, variables, domain) for line in template["config"]["env"]]
 
 
+def settings_lines(lines: list) -> list:
+    """The lines that set something: the Environment tab without its comment lines and blank lines, which Dokploy's
+    .env parser skips."""
+    return [line for line in lines if line.strip() != "" and not line.lstrip().startswith("#")]
+
+
 def check_meta(template: dict) -> None:
     meta = json.loads((ROOT / "meta.json").read_text(encoding="utf-8"))
     if not isinstance(meta, list) or len(meta) != 1:
@@ -137,7 +143,14 @@ def check_meta(template: dict) -> None:
 
 
 def check_template(template: dict, compose_text: str) -> None:
-    env = template_environment(template)
+    every = template_environment(template)
+    for line in every:
+        if line.lstrip().startswith("#") and re.match(r"#\s*TEME_(UPDATER_)?IMAGE\s*[=:]", line.lstrip()):
+            problem("template.toml's comments must not set TEME_IMAGE or TEME_UPDATER_IMAGE, even commented out.")
+    env = settings_lines(every)
+    for line in env:
+        if re.search(r"\s#", line.split("=", 1)[-1]):
+            problem(f"template.toml's env entry {line!r} has a comment after its value; a comment goes on a line of its own.")
     names = [line.split("=", 1)[0] for line in env]
     settings = dict(line.split("=", 1) for line in env)
     if len(names) != len(set(names)):
@@ -167,7 +180,7 @@ def check_template(template: dict, compose_text: str) -> None:
         decoded = b""
     if len(decoded) != 32:
         problem("template.toml's APP_KEY isn't base64: and 32 random bytes.")
-    if template_environment(template) == env:
+    if settings_lines(template_environment(template)) == env:
         problem("template.toml makes the same secrets twice; they must be generated.")
 
     for name in ("db_password", "postgres_password"):
@@ -267,7 +280,7 @@ def dokploy_env_file(lines: list, folder: Path) -> Path:
     value quoted, with a $ that doesn't open a ${NAME} escaped."""
     path = folder / "dokploy.env"
     written = ['APP_NAME="teme-abc123"', 'COMPOSE_PROJECT_NAME="teme-abc123"']
-    for line in lines:
+    for line in settings_lines(lines):
         key, value = line.split("=", 1)
         value = re.sub(r"\$(?!\{[A-Za-z_][A-Za-z0-9_]*\})", r"\\$", value.replace("\\", "\\\\").replace('"', '\\"'))
         written.append(f'{key}="{value}"')
