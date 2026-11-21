@@ -7,6 +7,7 @@ New sites install from this repository's main branch, so each heading is the day
 ### Changed
 
 - A new site's Environment tab is grouped, with a comment above each group saying what it is for and what must never change after the first deploy. The mail settings are there too, commented out, ready to fill in.
+- The comment above `TEME_DOKPLOY_APP_NAME` says not to edit it.
 
 Compose file: unchanged.
 
