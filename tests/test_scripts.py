@@ -68,13 +68,23 @@ class BumpTest(unittest.TestCase):
             check.BLUEPRINT, check.TEMPLATE, check.README, check.LIST, check.ROOT = saved
             check.problems.clear()
 
-    def test_says_so_in_the_changelog_under_unreleased(self) -> None:
-        (self.root / "CHANGELOG.md").write_text("# Changelog\n\nIntro.\n\n## Unreleased\n\n### Added\n\n- Something.\n\n## 2026-11-15\n\n- Old.\n", encoding="utf-8")
+    def test_says_so_in_the_changelog_under_todays_date(self) -> None:
+        (self.root / "CHANGELOG.md").write_text("# Changelog\n\nIntro.\n\n## 2026-11-15\n\n- Old.\n", encoding="utf-8")
 
-        bump.bump("99.0.0", self.root)
+        bump.bump("99.0.0", self.root, today="2026-11-21")
 
         self.assertEqual(
-            "# Changelog\n\nIntro.\n\n## Unreleased\n\n- Installs Teme 99.0.0.\n\n### Added\n\n- Something.\n\n## 2026-11-15\n\n- Old.\n",
+            "# Changelog\n\nIntro.\n\n## 2026-11-21\n\n- Installs Teme 99.0.0.\n\n## 2026-11-15\n\n- Old.\n",
+            (self.root / "CHANGELOG.md").read_text(encoding="utf-8"),
+        )
+
+    def test_a_second_release_the_same_day_joins_that_days_heading(self) -> None:
+        (self.root / "CHANGELOG.md").write_text("# Changelog\n\nIntro.\n\n## 2026-11-21\n\n### Changed\n\n- Something.\n", encoding="utf-8")
+
+        bump.bump("99.0.0", self.root, today="2026-11-21")
+
+        self.assertEqual(
+            "# Changelog\n\nIntro.\n\n## 2026-11-21\n\n- Installs Teme 99.0.0.\n\n### Changed\n\n- Something.\n",
             (self.root / "CHANGELOG.md").read_text(encoding="utf-8"),
         )
 
@@ -193,11 +203,25 @@ class CheckTest(unittest.TestCase):
 
         self.assertTrue(any(sentence.startswith("The updater's environment must be the core") for sentence in self.run_check()))
 
+    def test_the_environment_tab_is_grouped_with_comments_that_set_nothing(self) -> None:
+        template = check.tomllib.loads(check.TEMPLATE.read_text(encoding="utf-8"))
+        every = check.template_environment(template)
+        settings = check.settings_lines(every)
+
+        self.assertTrue(any(line.startswith("#") for line in every))
+        self.assertTrue(all("=" in line and not line.startswith("#") for line in settings))
+        self.assertNotIn("MAIL_MAILER", {line.split("=", 1)[0] for line in settings})
+
+    def test_catches_a_comment_after_a_value(self) -> None:
+        self.edit(check.TEMPLATE, '"APP_URL=https://${main_domain}",', '"APP_URL=https://${main_domain} # the address",')
+
+        self.assertTrue(any("has a comment after its value" in sentence for sentence in self.run_check()))
+
     def test_assumes_dokploy_fills_app_name_and_names_the_folders_without_it_too(self) -> None:
         """ASSUMPTION: Dokploy passes the App Name to the template as APP_NAME; the live run checks it. The check
         also holds when Dokploy leaves ${APP_NAME} as it is, through the APP_NAME line Dokploy writes first."""
         template = check.tomllib.loads(check.TEMPLATE.read_text(encoding="utf-8"))
-        unfilled = dict(line.split("=", 1) for line in check.template_environment(template, app_name=None))
+        unfilled = dict(line.split("=", 1) for line in check.settings_lines(check.template_environment(template, app_name=None)))
 
         self.assertEqual("${APP_NAME}", unfilled["STACK_SLUG"])
 

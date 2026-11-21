@@ -1,13 +1,22 @@
 # Changelog
 
-Each entry says whether the compose file changed. A site made from the template keeps the compose file it was made with until Teme's updater replaces it, which it does only for a file listed in `compose-hashes.json`.
+New sites install from this repository's main branch, so each heading is the day a change reached it. Each entry says whether the compose file changed. A site made from the template keeps the compose file it was made with until Teme's updater replaces it, which it does only for a file listed in `compose-hashes.json`.
 
-## Unreleased
+## 2026-11-21
+
+### Changed
+
+- A new site's Environment tab is grouped, with a comment above each group saying what it is for and what must never change after the first deploy. The mail settings are there too, commented out, ready to fill in.
+
+Compose file: unchanged.
+
+## 2026-11-20
 
 - Installs Teme 1.3.2.
 
-- Installs Teme 1.1.1.
+## 2026-11-18
 
+- Installs Teme 1.1.1.
 - Installs Teme 1.1.0.
 
 ### Changed (the compose file changed)
@@ -15,6 +24,8 @@ Each entry says whether the compose file changed. A site made from the template 
 - No part swaps: each has a swap limit equal to its memory limit, so a part at its limit can't slow the other sites on the server.
 - `web` starts at most 10 PHP workers by default (`PHP_FPM_PM_MAX_CHILDREN`), which fit in its 1g.
 - The scheduler's memory is 512m by default (was 256m), so a backup run fits.
+
+## 2026-11-17
 
 - Installs Teme 1.0.1.
 

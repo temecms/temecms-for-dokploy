@@ -16,16 +16,41 @@ db_password = "${hash:64}"
 postgres_password = "${hash:64}"
 
 [config]
+# The Environment tab, grouped, with a comment line above each group. A comment
+# is always a line of its own: a "#" after a value would become part of it.
 env = [
+    "# Teme's version. The Update button in the admin changes the next two lines;",
+    "# don't edit them while an update runs.",
     "TEME_IMAGE=${image_repository}:${teme_version}",
     "TEME_UPDATER_IMAGE=${image_repository}:${teme_version}",
     "TEME_IMAGE_REPOSITORY=${image_repository}",
+    "",
+    "# The address readers type, with https. Change it, and add the domain on the",
+    "# Domains tab, to use your own domain.",
     "APP_URL=https://${main_domain}",
+    "",
+    "# Never change these after the first deploy. The app key opens everything",
+    "# Teme encrypts; the passwords open the database; the slug names the site's",
+    "# data folders, so a new slug means an empty site.",
     "APP_KEY=${app_key}",
     "DB_PASSWORD=${db_password}",
     "POSTGRES_PASSWORD=${postgres_password}",
     "STACK_SLUG=${APP_NAME}",
+    "",
+    "# Must match this service's App Name, so the Update button finds it.",
     "TEME_DOKPLOY_APP_NAME=${APP_NAME}",
+    "",
+    "# Mail. Until these are set, Teme writes its mail (password resets,",
+    "# invitations, backup alerts) to its log instead of sending it. Remove the",
+    "# leading # and fill in your provider's details; for port 465, also set",
+    "# MAIL_SCHEME to smtps.",
+    "# MAIL_MAILER=smtp",
+    "# MAIL_HOST=smtp.example.com",
+    "# MAIL_PORT=587",
+    "# MAIL_USERNAME=",
+    "# MAIL_PASSWORD=",
+    "# MAIL_FROM_ADDRESS=hello@example.com",
+    "# MAIL_FROM_NAME=",
 ]
 
 [[config.domains]]
