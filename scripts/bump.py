@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Sets the Teme release the template installs: `version` in meta.json, `teme_version` in template.toml, and the two
-image lines of the README's block for the Environment tab; and adds "Installs Teme X." to CHANGELOG.md under
-today's date, the day the change reaches main and so every new install.
+"""Sets the Teme release the template installs: `teme_version` in template.toml, the two image lines of the README's
+block for the Environment tab and the "Installs Teme X." at the end of meta.json's description; and makes a new
+patch version of the template (meta.json's `version`), with "Installs Teme X." under its own heading in CHANGELOG.md.
 
 A template that installs a newer release already is left as it is, so a patch to an older line never moves it back.
 Nothing else in either file changes.
@@ -45,14 +45,19 @@ def bump(version: str, root: Path = ROOT, today: str | None = None) -> str:
     entries = json.loads(meta)
     meta_lines = re.findall(r'^\s*"version": "[^"]*",$', meta, re.M)
     toml_lines = re.findall(r'^teme_version = "[^"]*"$', toml, re.M)
-    if not isinstance(entries, list) or len(entries) != 1 or len(meta_lines) != 1 or len(toml_lines) != 1:
-        raise RuntimeError("The template doesn’t hold its version once in each file; nothing was changed.")
+    installs = re.findall(r' Installs Teme [^"]*\.",$', meta, re.M)
+    if not isinstance(entries, list) or len(entries) != 1 or len(meta_lines) != 1 or len(toml_lines) != 1 or len(installs) != 1:
+        raise RuntimeError("The template doesn’t hold its versions once in each file; nothing was changed.")
 
-    was = entries[0]["version"]
+    was = re.search(r'^teme_version = "([^"]*)"$', toml, re.M).group(1)
     if key(was) >= key(version):
         return f"The template installs {was} already; nothing was changed."
 
-    meta_file.write_text(re.sub(r'^(\s*"version": ")[^"]*(",)$', rf"\g<1>{version}\g<2>", meta, count=1, flags=re.M), encoding="utf-8", newline="\n")
+    major, minor, patch = (int(part) for part in str(entries[0]["version"]).split("."))
+    template_version = f"{major}.{minor}.{patch + 1}"
+    meta = re.sub(r'^(\s*"version": ")[^"]*(",)$', rf"\g<1>{template_version}\g<2>", meta, count=1, flags=re.M)
+    meta = re.sub(r' Installs Teme [^"]*\.(",)$', rf" Installs Teme {version}.\g<1>", meta, count=1, flags=re.M)
+    meta_file.write_text(meta, encoding="utf-8", newline="\n")
     toml_file.write_text(re.sub(r'^(teme_version = ")[^"]*(")$', rf"\g<1>{version}\g<2>", toml, count=1, flags=re.M), encoding="utf-8", newline="\n")
 
     # The README's block for the Environment tab names the same release.
@@ -62,20 +67,13 @@ def bump(version: str, root: Path = ROOT, today: str | None = None) -> str:
         readme = re.sub(r"^(\s*TEME_(?:UPDATER_)?IMAGE=ghcr\.io/temecms/teme:)\S+$", rf"\g<1>{version}", readme, flags=re.M)
         readme_file.write_text(readme, encoding="utf-8", newline="\n")
 
-    # And the changelog says so, under today's date: main is what every new install reads, so a change is live the
-    # day it lands. Today's heading is made if it isn't the newest one already.
+    # And the changelog says so, under the new version's own heading, newest first.
     changelog_file = root / "CHANGELOG.md"
     if changelog_file.exists():
         changelog = changelog_file.read_text(encoding="utf-8")
-        line = f"- Installs Teme {version}.\n"
-        heading = f"## {today}\n\n"
+        entry = f"## {template_version} — {today}\n\n- Installs Teme {version}.\n\n"
         first = changelog.find("\n## ")
-        if first != -1 and changelog.startswith(heading, first + 1):
-            changelog = changelog[: first + 1 + len(heading)] + line + "\n" + changelog[first + 1 + len(heading):]
-        elif first != -1:
-            changelog = changelog[: first + 1] + heading + line + "\n" + changelog[first + 1:]
-        else:
-            changelog = changelog.rstrip("\n") + "\n\n" + heading + line
+        changelog = changelog[: first + 1] + entry + changelog[first + 1:] if first != -1 else changelog.rstrip("\n") + "\n\n" + entry
         changelog_file.write_text(changelog, encoding="utf-8", newline="\n")
 
     return f"The template installs {version} now."
