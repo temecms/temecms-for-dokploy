@@ -28,8 +28,8 @@ SITE_PARTS = ["deploy", "web", "worker", "worker-long", "scheduler"]
 LIMITS = {
     "teme-postgres": ("TEME_POSTGRES", "1", "1g"),
     "web": ("TEME_WEB", "1", "1g"),
-    "worker": ("TEME_WORKER", "0.5", "512m"),
-    "worker-long": ("TEME_WORKER_LONG", "0.5", "512m"),
+    "worker": ("TEME_WORKER", "0.5", "768m"),
+    "worker-long": ("TEME_WORKER_LONG", "0.5", "1536m"),
     "scheduler": ("TEME_SCHEDULER", "0.25", "512m"),
     "installer": ("TEME_INSTALLER", "0.5", "1g"),
     "updater": ("TEME_UPDATER", "0.25", "256m"),

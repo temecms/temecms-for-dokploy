@@ -100,8 +100,8 @@ Each part's CPU and memory limit is a setting too, with these defaults:
 |---|---|---|
 | `teme-postgres` | `TEME_POSTGRES_CPUS=1` | `TEME_POSTGRES_MEMORY=1g` |
 | `web` | `TEME_WEB_CPUS=1` | `TEME_WEB_MEMORY=1g` |
-| `worker` | `TEME_WORKER_CPUS=0.5` | `TEME_WORKER_MEMORY=512m` |
-| `worker-long` | `TEME_WORKER_LONG_CPUS=0.5` | `TEME_WORKER_LONG_MEMORY=512m` |
+| `worker` | `TEME_WORKER_CPUS=0.5` | `TEME_WORKER_MEMORY=768m` |
+| `worker-long` | `TEME_WORKER_LONG_CPUS=0.5` | `TEME_WORKER_LONG_MEMORY=1536m` |
 | `scheduler` | `TEME_SCHEDULER_CPUS=0.25` | `TEME_SCHEDULER_MEMORY=512m` |
 | `installer` | `TEME_INSTALLER_CPUS=0.5` | `TEME_INSTALLER_MEMORY=1g` |
 | `updater` | `TEME_UPDATER_CPUS=0.25` | `TEME_UPDATER_MEMORY=256m` |

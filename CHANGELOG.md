@@ -2,6 +2,13 @@
 
 The template has its own version, shown on Dokploy's template list; every change other than to its documentation is a new version. New sites install from this repository's main branch, so a version is live the day it lands. Each entry says whether the compose file changed. A site made from the template keeps the compose file it was made with until Teme's updater replaces it, which it does only for a file listed in `compose-hashes.json`.
 
+## 1.0.5 — 2026-11-23
+
+### Changed (the compose file changed)
+
+- `worker-long` can use 1.5 GB by default (was 512 MB), `worker` 768 MB (was 512 MB). Making the resized copies of a large photo needs up to 1 GB, and at 512 MB the long worker was stopped partway through, so a large photo got no resized copies. These are ceilings, not reservations: an idle worker uses far less.
+- Both workers restart themselves after a job once they hold 512 MB (`--memory=512`), below their part's limit, instead of Laravel's 128 MB.
+
 ## 1.0.4 — 2026-11-22
 
 - Installs Teme 1.3.3.
