@@ -175,7 +175,7 @@ services:
         <<: *teme
         env_file: *site-settings
         command:
-            ['php', 'artisan', 'queue:work', '--tries=3', '--max-time=3600']
+            ['php', 'artisan', 'queue:work', '--tries=3', '--max-time=3600', '--memory=512']
         init: true
         stop_grace_period: 6m
         healthcheck:
@@ -190,10 +190,10 @@ services:
             resources:
                 limits:
                     cpus: '${TEME_WORKER_CPUS:-0.5}'
-                    memory: '${TEME_WORKER_MEMORY:-512m}'
+                    memory: '${TEME_WORKER_MEMORY:-768m}'
         # No swap: at its memory limit, a process in this part is stopped instead of
         # swapping and slowing every site on the server.
-        memswap_limit: '${TEME_WORKER_MEMORY:-512m}'
+        memswap_limit: '${TEME_WORKER_MEMORY:-768m}'
 
     worker-long:
         <<: *teme
@@ -207,6 +207,7 @@ services:
                 '--queue=long',
                 '--tries=3',
                 '--max-time=3600',
+                '--memory=512',
             ]
         init: true
         stop_grace_period: 6m
@@ -222,10 +223,10 @@ services:
             resources:
                 limits:
                     cpus: '${TEME_WORKER_LONG_CPUS:-0.5}'
-                    memory: '${TEME_WORKER_LONG_MEMORY:-512m}'
+                    memory: '${TEME_WORKER_LONG_MEMORY:-1536m}'
         # No swap: at its memory limit, a process in this part is stopped instead of
         # swapping and slowing every site on the server.
-        memswap_limit: '${TEME_WORKER_LONG_MEMORY:-512m}'
+        memswap_limit: '${TEME_WORKER_LONG_MEMORY:-1536m}'
 
     scheduler:
         <<: *teme
