@@ -41,8 +41,8 @@ The site's address is the one Dokploy made, ending in `sslip.io`, on the **Domai
 2. **Paste the settings.** Open the **Environment** tab and paste this block, then fill the four empty values:
 
    ```env
-   TEME_IMAGE=ghcr.io/temecms/teme:1.4.0
-   TEME_UPDATER_IMAGE=ghcr.io/temecms/teme:1.4.0
+   TEME_IMAGE=ghcr.io/temecms/teme:1.4.2
+   TEME_UPDATER_IMAGE=ghcr.io/temecms/teme:1.4.2
    TEME_IMAGE_REPOSITORY=ghcr.io/temecms/teme
    APP_URL=
    APP_KEY=
