@@ -2,6 +2,10 @@
 
 The template has its own version, shown on Dokploy's template list; every change other than to its documentation is a new version. New sites install from this repository's main branch, so a version is live the day it lands. Each entry says whether the compose file changed. A site made from the template keeps the compose file it was made with until Teme's updater replaces it, which it does only for a file listed in `compose-hashes.json`.
 
+## 1.0.10 — 2026-11-27
+
+- Installs Teme 1.7.1.
+
 ## 1.0.9 — 2026-11-26
 
 - Installs Teme 1.6.1.
